@@ -15,6 +15,7 @@ const props = defineProps<Props>()
 
 const emit = defineEmits<{
   (event: 'select', node: MediaDirectoryNode): void
+  (event: 'expand', node: MediaDirectoryNode): void
 }>()
 
 const scrollContainer = ref<HTMLElement>()
@@ -121,6 +122,7 @@ watch(
           :selected-id="selectedId"
           :expand-id="expandId"
           @select="emit('select', $event)"
+          @expand="emit('expand', $event)"
         />
       </ul>
     </div>

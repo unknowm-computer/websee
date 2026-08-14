@@ -19,6 +19,7 @@ import {
   extractArchiveEntry,
   loadArchiveIndex,
   loadDirectoryHandle,
+  loadDirectoryLevel,
   loadSelectedFiles,
 } from '@/services/mediaSources'
 import { createImageThumbnail } from '@/services/imageThumbnail'
@@ -80,6 +81,10 @@ let archivePreviewRequest = 0
 let archivePreviewTimer: number | undefined
 let archiveIndexingRun = 0
 let pendingFolderRefresh: CollectionRestoreState | undefined
+let directoryHandleCache = new Map<string, FileSystemDirectoryHandle>()
+const directoryLoadRequests = new Map<string, Promise<void>>()
+let directoryCollectionGeneration = 0
+let directoryNavigationRequest = 0
 
 interface CollectionRestoreState {
   directoryPath: string
@@ -88,11 +93,13 @@ interface CollectionRestoreState {
 
 interface UseCollectionOptions {
   directoryHandle?: FileSystemDirectoryHandle
+  directoryHandles?: Map<string, FileSystemDirectoryHandle>
   restore?: CollectionRestoreState
 }
 
 const ARCHIVE_ENTRY_CACHE_LIMIT = 3
 const ARCHIVE_THUMBNAIL_MAX_ENTRY_SIZE = 128 * 1024 * 1024
+const DIRECTORY_PLACEHOLDER_FILE = new File([], 'directory', { lastModified: 0 })
 const archiveEntryFiles = new Map<string, File>()
 const archiveEntryRequests = new Map<string, Promise<File>>()
 const archiveEntryCacheOrder: string[] = []
@@ -129,13 +136,11 @@ const selectedDirectoryNode = computed(() =>
 const childFolderItems = computed(() =>
   (selectedDirectoryNode.value?.children ?? [])
     .filter((node) => node.kind === 'folder')
-    .map((node) => createFolderItem(node, selectedDirectory.value))
-    .filter((item): item is MediaItem => item !== undefined),
+    .map((node) => createFolderItem(node, selectedDirectory.value)),
 )
 const folderParentItem = computed<MediaItem | undefined>(() => {
   if (!collection.value || !selectedDirectory.value) return undefined
-  const file = collection.value.items[0]?.file
-  if (!file) return undefined
+  const file = collection.value.items[0]?.file ?? DIRECTORY_PLACEHOLDER_FILE
 
   return {
     id: `folder-parent:${selectedDirectory.value}`,
@@ -223,6 +228,11 @@ const statusImageCount = computed(() =>
     (item) => item.kind === 'image' || item.kind === 'archive-entry',
   ).length,
 )
+const statusTotalCount = computed(() =>
+  browserItems.value.filter(
+    (item) => item.kind !== 'folder-parent' && item.kind !== 'archive-parent',
+  ).length,
+)
 const archiveIndexingStatus = computed(() =>
   archiveBrowsing.value && archiveIndexing.value
     ? `미리보기 ${archiveIndexingCompleted.value}/${archiveIndexingTotal.value}`
@@ -274,11 +284,10 @@ function findDirectoryNode(
   return undefined
 }
 
-function createFolderItem(node: MediaDirectoryNode, parentPath: string): MediaItem | undefined {
+function createFolderItem(node: MediaDirectoryNode, parentPath: string): MediaItem {
   const file = collection.value?.items.find(
     (item) => item.path === node.path || item.path.startsWith(`${node.path}/`),
-  )?.file
-  if (!file) return undefined
+  )?.file ?? DIRECTORY_PLACEHOLDER_FILE
 
   return {
     id: `folder:${node.path}`,
@@ -399,6 +408,70 @@ function leaveArchiveBrowser(): void {
   browserTreeNodeId.value = outerItemId ? `archive:${outerItemId}` : undefined
 }
 
+function ensureFolderLoaded(node: MediaDirectoryNode): Promise<void> {
+  if (node.kind !== 'folder' || node.loaded !== false) return Promise.resolve()
+
+  const existingRequest = directoryLoadRequests.get(node.path)
+  if (existingRequest) return existingRequest
+
+  const handle = directoryHandleCache.get(node.path)
+  const activeCollection = collection.value
+  const generation = directoryCollectionGeneration
+  if (!handle || !activeCollection) return Promise.resolve()
+
+  node.loading = true
+  let request!: Promise<void>
+  request = (async () => {
+    try {
+      const level = await loadDirectoryLevel(handle, node.path)
+      if (
+        generation !== directoryCollectionGeneration
+        || collection.value !== activeCollection
+      ) return
+
+      for (const [path, childHandle] of level.handles) {
+        directoryHandleCache.set(path, childHandle)
+      }
+      activeCollection.items.push(...level.items)
+      node.children = level.children
+      node.directCount = level.items.length
+      node.loaded = true
+      node.expandable = level.children.length > 0
+    } catch (error) {
+      const message = describeError(error, `${node.name} 폴더를 읽지 못했습니다.`)
+      if (message) showError(message)
+    } finally {
+      if (generation === directoryCollectionGeneration) node.loading = false
+      if (directoryLoadRequests.get(node.path) === request) {
+        directoryLoadRequests.delete(node.path)
+      }
+    }
+  })()
+
+  directoryLoadRequests.set(node.path, request)
+  return request
+}
+
+async function ensureDirectoryPathLoaded(path: string): Promise<MediaDirectoryNode | undefined> {
+  const root = collection.value?.tree
+  if (!root) return undefined
+  if (!path) return root
+
+  let currentNode = root
+  let currentPath = ''
+  for (const part of path.split('/').filter(Boolean)) {
+    await ensureFolderLoaded(currentNode)
+    currentPath = currentPath ? `${currentPath}/${part}` : part
+    const child = currentNode.children.find(
+      (candidate) => candidate.kind === 'folder' && candidate.path === currentPath,
+    )
+    if (!child) return undefined
+    currentNode = child
+  }
+  await ensureFolderLoaded(currentNode)
+  return currentNode
+}
+
 async function useCollection(
   nextCollection: MediaCollection,
   options: UseCollectionOptions = {},
@@ -407,12 +480,16 @@ async function useCollection(
   closeTextViewer()
   disposeArchiveBrowser()
   revokeAll()
+  directoryCollectionGeneration += 1
+  directoryNavigationRequest += 1
+  directoryLoadRequests.clear()
+  directoryHandleCache = options.directoryHandles ?? new Map()
   currentDirectoryHandle.value = options.directoryHandle
   collection.value = nextCollection
-  selectedDirectory.value = options.restore?.directoryPath
-    && findDirectoryNode(nextCollection.tree, options.restore.directoryPath)
-    ? options.restore.directoryPath
-    : ''
+  const restoredNode = options.restore?.directoryPath
+    ? await ensureDirectoryPathLoaded(options.restore.directoryPath)
+    : undefined
+  selectedDirectory.value = restoredNode?.path ?? ''
   await nextTick()
   selectedItemId.value = folderBrowserItems.value.find(
     (item) => item.path === options.restore?.itemPath,
@@ -449,9 +526,11 @@ async function openDirectory(): Promise<void> {
     const handle = await window.showDirectoryPicker()
     loadingMessage.value = '폴더의 이미지, 텍스트와 압축파일을 찾는 중입니다...'
     loading.value = true
-    const nextCollection = await loadDirectoryHandle(handle)
-    await useCollection(nextCollection, { directoryHandle: handle })
-    if (!nextCollection.items.length) showError('지원하는 이미지, 텍스트 또는 압축파일이 없는 폴더입니다.')
+    const loadedDirectory = await loadDirectoryHandle(handle)
+    await useCollection(loadedDirectory.collection, {
+      directoryHandle: handle,
+      directoryHandles: loadedDirectory.handles,
+    })
   } catch (error) {
     const message = describeError(error, '폴더를 읽지 못했습니다. 접근 권한을 확인해주세요.')
     if (message) showError(message)
@@ -503,11 +582,12 @@ async function refreshCollection(): Promise<void> {
   loadingMessage.value = '현재 폴더의 파일 목록을 새로고침하는 중입니다...'
   loading.value = true
   try {
-    const nextCollection = await loadDirectoryHandle(handle)
-    await useCollection(nextCollection, { directoryHandle: handle, restore })
-    if (!nextCollection.items.length) {
-      showError('지원하는 이미지, 텍스트 또는 압축파일이 없는 폴더입니다.')
-    }
+    const loadedDirectory = await loadDirectoryHandle(handle)
+    await useCollection(loadedDirectory.collection, {
+      directoryHandle: handle,
+      directoryHandles: loadedDirectory.handles,
+      restore,
+    })
   } catch (error) {
     const message = describeError(error, '파일 목록을 새로고침하지 못했습니다. 폴더 접근 권한을 확인해주세요.')
     if (message) showError(message)
@@ -567,11 +647,11 @@ async function handleDrop(event: DragEvent): Promise<void> {
       const handle = directoryHandles[0]
       loadingMessage.value = `${handle.name} 폴더의 이미지, 텍스트와 압축파일을 찾는 중입니다...`
       loading.value = true
-      const nextCollection = await loadDirectoryHandle(handle)
-      await useCollection(nextCollection, { directoryHandle: handle })
-      if (!nextCollection.items.length) {
-        showError('지원하는 이미지, 텍스트 또는 압축파일이 없는 폴더입니다.')
-      }
+      const loadedDirectory = await loadDirectoryHandle(handle)
+      await useCollection(loadedDirectory.collection, {
+        directoryHandle: handle,
+        directoryHandles: loadedDirectory.handles,
+      })
       return
     }
   } catch (error) {
@@ -609,11 +689,16 @@ function handleDragLeave(): void {
   if (dragDepth === 0) dragActive.value = false
 }
 
-function selectDirectory(path: string, preferredItemId?: string): void {
+async function selectDirectory(path: string, preferredItemId?: string): Promise<void> {
+  const requestId = ++directoryNavigationRequest
   if (archiveBrowsing.value) leaveArchiveBrowser()
   browserTreeNodeId.value = undefined
   cancelArchivePreview()
   selectedDirectory.value = path
+  selectedItemId.value = undefined
+  await ensureDirectoryPathLoaded(path)
+  if (requestId !== directoryNavigationRequest || selectedDirectory.value !== path) return
+
   const hasPreferredItem = folderBrowserItems.value.some((item) => item.id === preferredItemId)
   selectedItemId.value = hasPreferredItem
     ? preferredItemId
@@ -642,7 +727,7 @@ function selectArchiveDirectory(path: string, preferredItemId?: string): void {
 
 async function selectTreeNode(node: MediaDirectoryNode): Promise<void> {
   if (node.kind === 'folder') {
-    selectDirectory(node.path)
+    await selectDirectory(node.path)
     return
   }
 
@@ -662,6 +747,10 @@ async function selectTreeNode(node: MediaDirectoryNode): Promise<void> {
   } finally {
     if (pendingTreeNodeId.value === node.id) pendingTreeNodeId.value = undefined
   }
+}
+
+function expandTreeNode(node: MediaDirectoryNode): void {
+  if (node.kind === 'folder') void ensureFolderLoaded(node)
 }
 
 function selectItem(id: string): void {
@@ -1175,6 +1264,7 @@ onBeforeUnmount(() => {
           :selected-id="selectedTreeNodeId"
           :expand-id="requestedExpandedTreeNodeId"
           @select="selectTreeNode"
+          @expand="expandTreeNode"
         />
         <button
           type="button"
@@ -1263,7 +1353,7 @@ onBeforeUnmount(() => {
       :item="selectedBrowserItem"
       :image-count="statusImageCount"
       :task-status="archiveIndexingStatus"
-      :total-count="statusItems.length"
+      :total-count="statusTotalCount"
     />
 
     <input

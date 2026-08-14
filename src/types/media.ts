@@ -43,6 +43,9 @@ export interface MediaDirectoryNode {
   children: MediaDirectoryNode[]
   archiveItemId?: string
   indexed?: boolean
+  loaded?: boolean
+  loading?: boolean
+  expandable?: boolean
 }
 
 export interface MediaCollection {

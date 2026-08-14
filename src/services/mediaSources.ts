@@ -2,7 +2,7 @@ import { unzip } from 'fflate'
 
 import { extractRarEntry, listRarEntries } from '@/services/rarArchive'
 import { isMacosArchiveMetadata, readZipEntryNames } from '@/services/zipFileNames'
-import type { ArchiveIndex, MediaCollection, MediaItem } from '@/types/media'
+import type { ArchiveIndex, MediaCollection, MediaDirectoryNode, MediaItem } from '@/types/media'
 import {
   buildDirectoryTree,
   createMediaItem,
@@ -12,9 +12,22 @@ import {
   isImageFileName,
   isRarArchiveFileName,
   isSupportedMediaFileName,
+  naturalCompare,
 } from '@/utils/media'
 
 const SCAN_YIELD_INTERVAL = 80
+const FILE_METADATA_CONCURRENCY = 12
+
+export interface DirectoryLevelResult {
+  items: MediaItem[]
+  children: MediaDirectoryNode[]
+  handles: Map<string, FileSystemDirectoryHandle>
+}
+
+export interface LoadedDirectoryCollection {
+  collection: MediaCollection
+  handles: Map<string, FileSystemDirectoryHandle>
+}
 
 function createCollection(
   name: string,
@@ -33,34 +46,97 @@ async function yieldToBrowser(): Promise<void> {
   await new Promise<void>((resolve) => window.setTimeout(resolve, 0))
 }
 
-async function scanDirectory(
+export async function loadDirectoryLevel(
   handle: FileSystemDirectoryHandle,
   relativePath: string,
-  items: MediaItem[],
-): Promise<void> {
+): Promise<DirectoryLevelResult> {
+  const fileEntries: Array<{ entry: FileSystemFileHandle; path: string }> = []
+  const children: MediaDirectoryNode[] = []
+  const handles = new Map<string, FileSystemDirectoryHandle>()
   let processed = 0
 
   for await (const [name, entry] of handle.entries()) {
     const path = relativePath ? `${relativePath}/${name}` : name
 
     if (entry.kind === 'directory') {
-      await scanDirectory(entry, path, items)
+      handles.set(path, entry)
+      children.push({
+        id: `folder:${path}`,
+        kind: 'folder',
+        name,
+        path,
+        directCount: 0,
+        children: [],
+        loaded: false,
+        expandable: true,
+      })
     } else if (isSupportedMediaFileName(name)) {
-      const file = await entry.getFile()
-      items.push(createMediaItem(file, path))
+      fileEntries.push({ entry, path })
     }
 
     processed += 1
     if (processed % SCAN_YIELD_INTERVAL === 0) await yieldToBrowser()
   }
+
+  const items = new Array<MediaItem>(fileEntries.length)
+  let nextFileIndex = 0
+  const workers = Array.from(
+    { length: Math.min(FILE_METADATA_CONCURRENCY, fileEntries.length) },
+    async () => {
+      while (nextFileIndex < fileEntries.length) {
+        const index = nextFileIndex
+        nextFileIndex += 1
+        const { entry, path } = fileEntries[index]
+        const file = await entry.getFile()
+        items[index] = createMediaItem(file, path)
+      }
+    },
+  )
+  await Promise.all(workers)
+
+  for (const item of items) {
+    if (item.kind !== 'archive') continue
+    children.push({
+      id: `archive:${item.id}`,
+      kind: 'archive',
+      name: item.name,
+      path: item.path,
+      directCount: 0,
+      children: [],
+      archiveItemId: item.id,
+      indexed: false,
+    })
+  }
+
+  children.sort((left, right) => {
+    if (left.kind !== right.kind) return left.kind === 'folder' ? -1 : 1
+    return naturalCompare(left.name, right.name)
+  })
+
+  return { items, children, handles }
 }
 
 export async function loadDirectoryHandle(
   handle: FileSystemDirectoryHandle,
-): Promise<MediaCollection> {
-  const items: MediaItem[] = []
-  await scanDirectory(handle, '', items)
-  return createCollection(handle.name, 'folder', items)
+): Promise<LoadedDirectoryCollection> {
+  const level = await loadDirectoryLevel(handle, '')
+  const tree: MediaDirectoryNode = {
+    id: 'folder:',
+    kind: 'folder',
+    name: handle.name,
+    path: '',
+    directCount: level.items.length,
+    children: level.children,
+    loaded: true,
+    expandable: level.children.length > 0,
+  }
+  const handles = new Map<string, FileSystemDirectoryHandle>([['', handle]])
+  for (const [path, childHandle] of level.handles) handles.set(path, childHandle)
+
+  return {
+    collection: { name: handle.name, kind: 'folder', items: level.items, tree },
+    handles,
+  }
 }
 
 export function loadSelectedFiles(files: readonly File[]): MediaCollection {

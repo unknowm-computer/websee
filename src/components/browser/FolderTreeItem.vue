@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, watch } from 'vue'
+import { computed, ref, watch } from 'vue'
 
 import SvgIcon from '@/components/common/SvgIcon.vue'
 import type { MediaDirectoryNode } from '@/types/media'
@@ -17,9 +17,13 @@ const props = withDefaults(defineProps<Props>(), {
 
 const emit = defineEmits<{
   (event: 'select', node: MediaDirectoryNode): void
+  (event: 'expand', node: MediaDirectoryNode): void
 }>()
 
 const expanded = ref(props.depth === 0)
+const canExpand = computed(() =>
+  props.node.children.length > 0 || props.node.loaded === false || props.node.loading,
+)
 
 function containsNode(node: MediaDirectoryNode, id: string): boolean {
   if (node.id === id) return true
@@ -27,9 +31,9 @@ function containsNode(node: MediaDirectoryNode, id: string): boolean {
 }
 
 watch(
-  () => props.expandId,
-  (expandId) => {
-    if (expandId && props.node.children.length && containsNode(props.node, expandId)) {
+  () => [props.expandId, props.node.children.length] as const,
+  ([expandId]) => {
+    if (expandId && canExpand.value && containsNode(props.node, expandId)) {
       expanded.value = true
     }
   },
@@ -41,9 +45,18 @@ function handleHorizontalKeydown(event: KeyboardEvent): void {
 
   event.preventDefault()
   event.stopPropagation()
-  if (!props.node.children.length) return
+  if (event.key === 'ArrowLeft') {
+    expanded.value = false
+    return
+  }
+  if (!canExpand.value) return
+  expanded.value = true
+  emit('expand', props.node)
+}
 
-  expanded.value = event.key === 'ArrowRight'
+function toggleExpanded(): void {
+  expanded.value = !expanded.value
+  if (expanded.value) emit('expand', props.node)
 }
 </script>
 
@@ -51,12 +64,12 @@ function handleHorizontalKeydown(event: KeyboardEvent): void {
   <li class="folder-tree-item">
     <div class="folder-tree-item__row" :style="{ paddingLeft: `${depth * 15 + 4}px` }">
       <button
-        v-if="node.children.length"
+        v-if="canExpand"
         type="button"
         class="folder-tree-item__toggle"
         :aria-label="expanded ? `${node.name} 접기` : `${node.name} 펼치기`"
         :aria-expanded="expanded"
-        @click="expanded = !expanded"
+        @click="toggleExpanded"
       >
         <SvgIcon :name="expanded ? 'remove' : 'add'" :size="12" />
       </button>
@@ -69,7 +82,7 @@ function handleHorizontalKeydown(event: KeyboardEvent): void {
           'is-archive': node.kind === 'archive',
           'is-selected': selectedId === node.id,
         }"
-        :title="node.kind === 'archive' ? `${node.name} 압축파일` : `${node.name} (${node.directCount})`"
+        :title="node.kind === 'archive' ? `${node.name} 압축파일` : node.name"
         @click="emit('select', node)"
         @keydown="handleHorizontalKeydown"
       >
@@ -78,7 +91,6 @@ function handleHorizontalKeydown(event: KeyboardEvent): void {
           :size="17"
         />
         <span>{{ node.name }}</span>
-        <small v-if="node.kind !== 'archive'">{{ node.directCount }}</small>
       </button>
     </div>
 
@@ -91,6 +103,7 @@ function handleHorizontalKeydown(event: KeyboardEvent): void {
         :expand-id="expandId"
         :depth="depth + 1"
         @select="emit('select', $event)"
+        @expand="emit('expand', $event)"
       />
     </ul>
   </li>
@@ -131,7 +144,7 @@ function handleHorizontalKeydown(event: KeyboardEvent): void {
 
   &__name {
     display: grid;
-    grid-template-columns: 18px minmax(24px, 1fr) auto;
+    grid-template-columns: 18px minmax(24px, 1fr);
     gap: 3px;
     align-items: center;
     max-width: 205px;
@@ -150,10 +163,6 @@ function handleHorizontalKeydown(event: KeyboardEvent): void {
       text-overflow: ellipsis;
     }
 
-    small {
-      color: var(--color-muted);
-    }
-
     &:hover {
       background: var(--color-highlight);
       border-color: var(--color-shadow);
@@ -164,9 +173,6 @@ function handleHorizontalKeydown(event: KeyboardEvent): void {
       background: var(--color-selection);
       border-color: var(--color-selection-dark);
 
-      small {
-        color: #fff;
-      }
     }
   }
 }
