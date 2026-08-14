@@ -1,0 +1,69 @@
+:root {
+  color-scheme: light;
+  font-family: 'Pretendard GOV', Tahoma, 'Segoe UI', Arial, sans-serif;
+  font-size: 16px;
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+  --color-face: #d4d0c8;
+  --color-pressed: #c5c1b9;
+  --color-window-text: #111;
+  --color-shadow: #808080;
+  --color-shadow-dark: #404040;
+  --color-light: #fff;
+  --color-highlight: #d8e4f5;
+  --color-highlight-dark: #9aaed0;
+  --color-selection: #0a4c9a;
+  --color-selection-dark: #06366f;
+  --color-disabled: #777;
+  --color-muted: #5c5c5c;
+  --color-icon: #234c83;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#app {
+  width: 100%;
+  height: 100%;
+  padding: 0;
+  margin: 0;
+}
+
+body {
+  min-width: 480px;
+  overflow: hidden;
+  background: var(--color-face);
+}
+
+button,
+select,
+input {
+  font: inherit;
+}
+
+button:not(:disabled),
+select:not(:disabled) {
+  cursor: default;
+}
+
+button:focus-visible,
+select:focus-visible,
+[tabindex]:focus-visible {
+  outline: 1px dotted #000;
+  outline-offset: -3px;
+}
+
+.visually-hidden {
+  position: absolute !important;
+  width: 1px !important;
+  height: 1px !important;
+  padding: 0 !important;
+  margin: -1px !important;
+  overflow: hidden !important;
+  clip: rect(0, 0, 0, 0) !important;
+  white-space: nowrap !important;
+  border: 0 !important;
+}

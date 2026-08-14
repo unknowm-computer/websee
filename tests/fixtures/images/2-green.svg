@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="480" height="640" viewBox="0 0 480 640">
+  <rect width="480" height="640" fill="#e8ead7"/>
+  <rect x="48" y="54" width="384" height="532" fill="#f7f4df" stroke="#31573c" stroke-width="8"/>
+  <circle cx="240" cy="240" r="112" fill="#86a66e"/>
+  <path d="M240 114v252M114 240h252M150 150l180 180M330 150 150 330" stroke="#f7f4df" stroke-width="20"/>
+  <text x="128" y="500" font-family="Tahoma, sans-serif" font-size="31" font-weight="700" fill="#31573c">GREEN</text>
+  <text x="118" y="537" font-family="Tahoma, sans-serif" font-size="20" fill="#31573c">480 × 640</text>
+</svg>

@@ -1,0 +1,29 @@
+{
+  "manifest_version": 3,
+  "name": "WebSee",
+  "version": "0.1.0",
+  "description": "로컬 폴더와 압축파일 이미지를 빠르게 탐색하는 읽기 전용 이미지 뷰어",
+  "minimum_chrome_version": "102",
+  "icons": {
+    "16": "icons/icon-16.png",
+    "32": "icons/icon-32.png",
+    "48": "icons/icon-48.png",
+    "128": "icons/icon-128.png"
+  },
+  "action": {
+    "default_title": "WebSee 열기",
+    "default_icon": {
+      "16": "icons/icon-16.png",
+      "32": "icons/icon-32.png",
+      "48": "icons/icon-48.png"
+    }
+  },
+  "background": {
+    "service_worker": "background.js",
+    "type": "module"
+  },
+  "permissions": ["storage"],
+  "content_security_policy": {
+    "extension_pages": "script-src 'self' 'wasm-unsafe-eval'; object-src 'none'; style-src 'self' https://cdn.jsdelivr.net; font-src 'self' https://cdn.jsdelivr.net"
+  }
+}

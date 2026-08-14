@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="640" height="420" viewBox="0 0 640 420">
+  <rect width="640" height="420" fill="#dce9f8"/>
+  <circle cx="485" cy="100" r="52" fill="#f1ce67"/>
+  <path d="M0 340 155 160l105 122L390 112l250 228v80H0Z" fill="#315e83"/>
+  <path d="m155 160 42 49-48 16Z" fill="#f4f7fb"/>
+  <text x="28" y="54" font-family="Tahoma, sans-serif" font-size="28" fill="#12314e">BLUE MOUNTAIN</text>
+</svg>
