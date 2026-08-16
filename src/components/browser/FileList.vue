@@ -144,7 +144,7 @@ onBeforeUnmount(() => resizeObserver?.disconnect())
               <small><span>{{ getFileIconLabel(entry.item) }}</span></small>
             </span>
             <SvgIcon
-              v-else-if="entry.item.kind === 'text'"
+              v-else-if="entry.item.kind === 'text' || entry.item.kind === 'archive-text-entry'"
               name="docs"
               :size="18"
             />

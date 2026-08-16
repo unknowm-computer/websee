@@ -12,6 +12,7 @@ import {
   isImageFileName,
   isRarArchiveFileName,
   isSupportedMediaFileName,
+  isTextFileName,
   naturalCompare,
 } from '@/utils/media'
 
@@ -178,15 +179,16 @@ async function loadZipArchiveIndex(file: File, data: ArrayBuffer): Promise<Archi
           const decodedPath = decodedEntryNames[currentEntryIndex] ?? entry.name
           entryIndex += 1
 
+          const supportedEntry = isImageFileName(decodedPath) || isTextFileName(decodedPath)
           if (
             !decodedPath.endsWith('/')
             && !isMacosArchiveMetadata(decodedPath)
-            && isImageFileName(decodedPath)
+            && supportedEntry
           ) {
             const name = decodedPath.split('/').at(-1) ?? decodedPath
             items.push({
               id: `${archiveId}:${currentEntryIndex}:${decodedPath}:${entry.originalSize}`,
-              kind: 'archive-entry',
+              kind: isTextFileName(decodedPath) ? 'archive-text-entry' : 'archive-entry',
               name,
               path: decodedPath,
               directoryPath: getDirectoryPath(decodedPath),
@@ -221,14 +223,17 @@ async function loadRarArchiveIndex(file: File, data: ArrayBuffer): Promise<Archi
   const archiveId = `archive-index:${file.name}:${file.size}:${file.lastModified}`
   const entries = await listRarEntries(data)
   const items = entries
-    .filter((entry) => !isMacosArchiveMetadata(entry.path) && isImageFileName(entry.path))
+    .filter((entry) =>
+      !isMacosArchiveMetadata(entry.path)
+      && (isImageFileName(entry.path) || isTextFileName(entry.path)),
+    )
     .map<MediaItem>((entry, entryIndex) => {
       const name = entry.path.split(/[\\/]/).at(-1) ?? entry.path
       const normalizedPath = entry.path.replaceAll('\\', '/')
 
       return {
         id: `${archiveId}:${entryIndex}:${normalizedPath}:${entry.size}`,
-        kind: 'archive-entry',
+        kind: isTextFileName(normalizedPath) ? 'archive-text-entry' : 'archive-entry',
         name,
         path: normalizedPath,
         directoryPath: getDirectoryPath(normalizedPath),
@@ -290,7 +295,7 @@ export async function extractArchiveEntry(
   }
 
   return new File([extractedData], item.name, {
-    type: getImageMimeType(item.name),
+    type: item.kind === 'archive-text-entry' ? 'text/plain' : getImageMimeType(item.name),
     lastModified: index.archiveFile.lastModified,
   })
 }

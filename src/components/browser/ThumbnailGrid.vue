@@ -184,7 +184,7 @@ defineExpose({ moveSelectionByKey })
             'is-archive-entry': entry.item.kind === 'archive-entry',
             'is-archive-parent': entry.item.kind === 'archive-parent',
             'is-folder': entry.item.kind === 'folder' || entry.item.kind === 'folder-parent',
-            'is-text': entry.item.kind === 'text',
+            'is-text': entry.item.kind === 'text' || entry.item.kind === 'archive-text-entry',
           }"
         >
           <img
@@ -209,7 +209,7 @@ defineExpose({ moveSelectionByKey })
               :size="64"
             />
           </span>
-          <span v-else-if="entry.item.kind === 'text'" class="thumbnail-grid__text-icon" aria-hidden="true">
+          <span v-else-if="entry.item.kind === 'text' || entry.item.kind === 'archive-text-entry'" class="thumbnail-grid__text-icon" aria-hidden="true">
             <SvgIcon name="docs" :size="58" />
           </span>
           <span v-else class="thumbnail-grid__entry-icon" aria-hidden="true">
@@ -226,6 +226,7 @@ defineExpose({ moveSelectionByKey })
             {{ entry.item.format }}
             <template v-if="entry.item.kind === 'archive'"> · 압축파일</template>
             <template v-else-if="entry.item.kind === 'text'"> · 텍스트</template>
+            <template v-else-if="entry.item.kind === 'archive-text-entry'"> · 압축 텍스트</template>
             <template v-else-if="entry.item.kind === 'archive-entry'">
               · 압축 이미지
               <template v-if="entry.item.width && entry.item.height">

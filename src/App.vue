@@ -253,6 +253,12 @@ const selectedTreeNodeId = computed(() => {
 const selectedBrowserItem = computed(() =>
   browserItems.value.find((item) => item.id === browserSelectedId.value),
 )
+const selectedTextPreviewItem = computed(() => {
+  const item = selectedBrowserItem.value
+  if (item?.kind === 'text') return item
+  if (item?.kind === 'archive-text-entry' && item.id === archivePreviewItemId.value) return item
+  return undefined
+})
 const canOpenViewer = computed(() => browserItems.value.length > 0)
 const canRefreshCollection = computed(() =>
   Boolean(currentDirectoryHandle.value || collection.value?.kind === 'folder'),
@@ -771,7 +777,9 @@ function selectBrowserItem(id: string): void {
         ? `archive-directory:${outerItemId}:${treePath}`
         : `archive:${outerItemId}`
     }
-    if (item?.kind === 'archive-entry') scheduleArchivePreview(item)
+    if (item?.kind === 'archive-entry' || item?.kind === 'archive-text-entry') {
+      scheduleArchivePreview(item)
+    }
     else cancelArchivePreview()
     return
   }
@@ -835,7 +843,7 @@ async function enterArchiveBrowser(item: MediaItem): Promise<void> {
     }
 
     if (!index.items.length) {
-      showError('압축파일 안에 지원하는 이미지가 없습니다.')
+      showError('압축파일은 정상이지만 WebSee에서 지원하는 이미지나 텍스트가 없습니다.')
       return
     }
 
@@ -888,7 +896,10 @@ function scheduleArchivePreview(item: MediaItem): void {
 
 async function prepareArchivePreview(item: MediaItem, requestId: number): Promise<void> {
   const index = archiveIndex.value
-  if (!index || item.kind !== 'archive-entry') return
+  if (
+    !index
+    || (item.kind !== 'archive-entry' && item.kind !== 'archive-text-entry')
+  ) return
 
   try {
     const file = await getArchiveEntryFile(index, item)
@@ -902,7 +913,7 @@ async function prepareArchivePreview(item: MediaItem, requestId: number): Promis
     archivePreviewItemId.value = item.id
   } catch (error) {
     if (requestId !== archivePreviewRequest) return
-    const message = describeError(error, '압축파일 안의 이미지 미리보기를 만들지 못했습니다.')
+    const message = describeError(error, '압축파일 안의 미리보기를 만들지 못했습니다.')
     if (message) showError(message)
   } finally {
     if (requestId === archivePreviewRequest) archivePreviewLoading.value = false
@@ -938,7 +949,8 @@ function getNextArchiveIndexingItem(
 }
 
 async function processArchiveIndexing(index: ArchiveIndex, runId: number): Promise<void> {
-  const pendingIds = new Set(index.items.map((item) => item.id))
+  const imageItems = index.items.filter((item) => item.kind === 'archive-entry')
+  const pendingIds = new Set(imageItems.map((item) => item.id))
 
   while (pendingIds.size && archiveIndexingRun === runId && archiveIndex.value === index) {
     const item = getNextArchiveIndexingItem(index, pendingIds)
@@ -962,7 +974,7 @@ async function processArchiveIndexing(index: ArchiveIndex, runId: number): Promi
     } finally {
       pendingIds.delete(item.id)
       if (archiveIndexingRun === runId && archiveIndex.value === index) {
-        archiveIndexingCompleted.value = index.items.length - pendingIds.size
+        archiveIndexingCompleted.value = archiveIndexingTotal.value - pendingIds.size
       }
     }
 
@@ -975,10 +987,11 @@ async function processArchiveIndexing(index: ArchiveIndex, runId: number): Promi
 }
 
 function startArchiveIndexing(index: ArchiveIndex): void {
+  const imageCount = index.items.filter((item) => item.kind === 'archive-entry').length
   const runId = ++archiveIndexingRun
   archiveIndexingCompleted.value = 0
-  archiveIndexingTotal.value = index.items.length
-  archiveIndexing.value = index.items.length > 0
+  archiveIndexingTotal.value = imageCount
+  archiveIndexing.value = imageCount > 0
   if (archiveIndexing.value) void processArchiveIndexing(index, runId)
 }
 
@@ -990,7 +1003,9 @@ function cacheArchiveEntry(index: ArchiveIndex, item: MediaItem, file: File): vo
 
   while (archiveEntryCacheOrder.length > ARCHIVE_ENTRY_CACHE_LIMIT) {
     const evictIndex = archiveEntryCacheOrder.findIndex(
-      (id) => id !== item.id && id !== viewerCurrentId.value,
+      (id) => id !== item.id
+        && id !== viewerCurrentId.value
+        && id !== textViewerItem.value?.id,
     )
     if (evictIndex < 0) break
 
@@ -1022,7 +1037,9 @@ async function openArchiveEntry(item: MediaItem): Promise<void> {
     cacheArchiveEntry(index, item, file)
     archivePreviewItemId.value = item.id
     viewerSource.value = 'archive'
-    viewerItems.value = archiveItems.value
+    viewerItems.value = archiveItems.value.filter(
+      (candidate) => candidate.kind === 'archive-entry',
+    )
     viewerCurrentId.value = item.id
     initialSlideshow.value = false
     viewerOpen.value = true
@@ -1030,6 +1047,36 @@ async function openArchiveEntry(item: MediaItem): Promise<void> {
     if (requestId !== archiveExtractionRequest) return
     archiveSelectedItemId.value = previousSelectedId
     const message = describeError(error, '압축파일 안의 이미지를 열지 못했습니다.')
+    if (message) showError(message)
+  } finally {
+    if (requestId === archiveExtractionRequest) loading.value = false
+  }
+}
+
+async function openArchiveTextEntry(item: MediaItem): Promise<void> {
+  const index = archiveIndex.value
+  if (!index || item.kind !== 'archive-text-entry') return
+
+  closeViewer()
+  closeTextViewer()
+  cancelArchivePreview()
+  const requestId = ++archiveExtractionRequest
+  const previousSelectedId = archiveSelectedItemId.value
+  archiveSelectedItemId.value = item.id
+  loadingMessage.value = `${item.name} 텍스트를 여는 중입니다...`
+  loading.value = true
+
+  try {
+    const file = await getArchiveEntryFile(index, item)
+    if (requestId !== archiveExtractionRequest || archiveIndex.value !== index) return
+
+    cacheArchiveEntry(index, item, file)
+    archivePreviewItemId.value = item.id
+    textViewerItem.value = item
+  } catch (error) {
+    if (requestId !== archiveExtractionRequest) return
+    archiveSelectedItemId.value = previousSelectedId
+    const message = describeError(error, '압축파일 안의 텍스트를 열지 못했습니다.')
     if (message) showError(message)
   } finally {
     if (requestId === archiveExtractionRequest) loading.value = false
@@ -1079,6 +1126,11 @@ function openViewer(id?: string, slideshow = false): void {
 
   if (item.kind === 'archive-entry') {
     void openArchiveEntry(item)
+    return
+  }
+
+  if (item.kind === 'archive-text-entry') {
+    void openArchiveTextEntry(item)
     return
   }
 
@@ -1284,8 +1336,8 @@ onBeforeUnmount(() => {
           @dblclick="resetPaneSize('preview')"
         />
         <TextPreviewPane
-          v-if="selectedBrowserItem?.kind === 'text'"
-          :item="selectedBrowserItem"
+          v-if="selectedTextPreviewItem"
+          :item="selectedTextPreviewItem"
         />
         <ImagePreviewPane
           v-else

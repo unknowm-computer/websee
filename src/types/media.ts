@@ -13,6 +13,7 @@ export type MediaItemKind =
   | 'text'
   | 'archive'
   | 'archive-entry'
+  | 'archive-text-entry'
   | 'archive-parent'
   | 'folder'
   | 'folder-parent'

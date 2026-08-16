@@ -38,7 +38,7 @@ describe('archive sources', () => {
     ])
   })
 
-  it('indexes image metadata without extracting entries, then extracts only the selected image', async () => {
+  it('indexes supported image and text metadata, then extracts only the selected entry', async () => {
     const archiveBytes = zipSync({
       'chapter/10.jpg': strToU8('ten'),
       'chapter/2.jpg': strToU8('two'),
@@ -56,15 +56,25 @@ describe('archive sources', () => {
     expect(index.tree.children[0]).toMatchObject({
       kind: 'folder',
       name: 'chapter',
-      directCount: 3,
+      directCount: 4,
     })
-    expect(index.items.every((item) => item.kind === 'archive-entry')).toBe(true)
+    expect(index.items.map((item) => item.kind)).toEqual([
+      'archive-entry',
+      'archive-entry',
+      'archive-entry',
+      'archive-text-entry',
+    ])
     expect(index.items.every((item) => item.file === archive)).toBe(true)
-    expect(names).toEqual(['1.jpg', '2.jpg', '10.jpg'])
+    expect(names).toEqual(['1.jpg', '2.jpg', '10.jpg', 'readme.txt'])
 
     const extracted = await extractArchiveEntry(index, sortedItems[1])
     expect(extracted.name).toBe('2.jpg')
     expect(new TextDecoder().decode(await extracted.arrayBuffer())).toBe('two')
+
+    const extractedText = await extractArchiveEntry(index, sortedItems[3])
+    expect(extractedText.name).toBe('readme.txt')
+    expect(extractedText.type).toBe('text/plain')
+    expect(new TextDecoder().decode(await extractedText.arrayBuffer())).toBe('ignore')
   })
 
   it('decodes legacy CP949 Korean entry names and still extracts the selected image', async () => {

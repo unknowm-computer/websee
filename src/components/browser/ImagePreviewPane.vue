@@ -26,7 +26,11 @@ const previewItem = computed(() => {
   return undefined
 })
 const emptyMessage = computed(() => {
-  if (props.loading) return '선택한 이미지를 미리 보는 중입니다...'
+  if (props.loading) {
+    return props.item?.kind === 'archive-text-entry'
+      ? '선택한 텍스트를 미리 보는 중입니다...'
+      : '선택한 이미지를 미리 보는 중입니다...'
+  }
   if (
     props.item?.kind === 'archive'
     || props.item?.kind === 'archive-parent'
@@ -34,6 +38,7 @@ const emptyMessage = computed(() => {
     return '압축파일을 열고 이미지를 선택하세요.'
   }
   if (props.item?.kind === 'archive-entry') return '이미지 미리보기를 표시할 수 없습니다.'
+  if (props.item?.kind === 'archive-text-entry') return '텍스트 미리보기를 표시할 수 없습니다.'
   return '이미지 파일을 선택하세요.'
 })
 
