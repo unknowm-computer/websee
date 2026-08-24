@@ -175,7 +175,6 @@ defineExpose({ moveSelectionByKey })
         :title="entry.item.path"
         @click="emit('select', entry.item.id)"
         @dblclick="emit('open', entry.item.id)"
-        @keydown.enter.prevent.stop="emit('open', entry.item.id)"
       >
         <span
           class="thumbnail-grid__image-frame"
