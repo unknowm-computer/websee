@@ -18,6 +18,7 @@ import {
 
 const SCAN_YIELD_INTERVAL = 80
 const FILE_METADATA_CONCURRENCY = 12
+const INTERNAL_DIRECTORY_NAMES = new Set(['.websee'])
 
 export interface DirectoryLevelResult {
   items: MediaItem[]
@@ -57,6 +58,7 @@ export async function loadDirectoryLevel(
   let processed = 0
 
   for await (const [name, entry] of handle.entries()) {
+    if (entry.kind === 'directory' && INTERNAL_DIRECTORY_NAMES.has(name)) continue
     const path = relativePath ? `${relativePath}/${name}` : name
 
     if (entry.kind === 'directory') {

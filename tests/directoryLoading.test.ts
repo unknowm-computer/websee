@@ -60,4 +60,19 @@ describe('directory lazy loading', () => {
     expect(level.children.map((node) => node.path)).toEqual(['child/grandchild'])
     expect(nestedImage.getFile).toHaveBeenCalledOnce()
   })
+
+  it('hides the internal translation sidecar directory', async () => {
+    const sidecarDirectory = createDirectoryHandle([])
+    const image = createFileHandle('root.jpg')
+    const rootDirectory = createDirectoryHandle([
+      ['.websee', sidecarDirectory],
+      ['root.jpg', image],
+    ])
+
+    const loaded = await loadDirectoryHandle(asDirectoryHandle(rootDirectory))
+
+    expect(loaded.collection.tree.children).toEqual([])
+    expect(loaded.handles.has('.websee')).toBe(false)
+    expect(loaded.collection.items.map((item) => item.name)).toEqual(['root.jpg'])
+  })
 })

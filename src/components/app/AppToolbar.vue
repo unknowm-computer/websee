@@ -1,27 +1,31 @@
 <script setup lang="ts">
-import SvgIcon from '@/components/common/SvgIcon.vue'
-import type { MediaSortKey, MediaViewMode } from '@/types/media'
+import SvgIcon from "@/components/common/SvgIcon.vue";
+import type { MediaSortKey, MediaViewMode } from "@/types/media";
 
 interface Props {
-  canRefresh: boolean
-  hasMedia: boolean
-  sortAscending: boolean
-  sortKey: MediaSortKey
-  viewMode: MediaViewMode
+  batchActive: boolean;
+  canBatchTranslate: boolean;
+  canRefresh: boolean;
+  hasMedia: boolean;
+  sortAscending: boolean;
+  sortKey: MediaSortKey;
+  viewMode: MediaViewMode;
 }
 
-defineProps<Props>()
+defineProps<Props>();
 
 const emit = defineEmits<{
-  (event: 'open-directory'): void
-  (event: 'open-images'): void
-  (event: 'open-archive'): void
-  (event: 'refresh'): void
-  (event: 'set-view', mode: MediaViewMode): void
-  (event: 'set-sort', key: MediaSortKey): void
-  (event: 'toggle-sort-direction'): void
-  (event: 'show-help'): void
-}>()
+  (event: "open-directory"): void;
+  (event: "open-images"): void;
+  (event: "open-archive"): void;
+  (event: "refresh"): void;
+  (event: "show-batch-translation"): void;
+  (event: "set-view", mode: MediaViewMode): void;
+  (event: "set-sort", key: MediaSortKey): void;
+  (event: "toggle-sort-direction"): void;
+  (event: "show-options"): void;
+  (event: "show-help"): void;
+}>();
 </script>
 
 <template>
@@ -34,7 +38,11 @@ const emit = defineEmits<{
       <SvgIcon class="app-toolbar__icon" name="image" />
       <span>이미지</span>
     </button>
-    <button type="button" title="ZIP, CBZ, RAR 또는 CBR 열기" @click="emit('open-archive')">
+    <button
+      type="button"
+      title="ZIP, CBZ, RAR 또는 CBR 열기"
+      @click="emit('open-archive')"
+    >
       <SvgIcon class="app-toolbar__icon" name="folder-zip" />
       <span>압축파일</span>
     </button>
@@ -46,6 +54,20 @@ const emit = defineEmits<{
     >
       <SvgIcon class="app-toolbar__icon" name="refresh" />
       <span>새로고침</span>
+    </button>
+
+    <span class="app-toolbar__separator" aria-hidden="true" />
+
+    <button
+      type="button"
+      :class="{ 'is-pressed': batchActive }"
+      :aria-pressed="batchActive"
+      title="현재 폴더의 이미지와 압축파일을 일괄 번역"
+      :disabled="!canBatchTranslate"
+      @click="emit('show-batch-translation')"
+    >
+      <SvgIcon class="app-toolbar__icon" name="auto" />
+      <span>일괄 번역</span>
     </button>
 
     <span class="app-toolbar__separator" aria-hidden="true" />
@@ -79,7 +101,12 @@ const emit = defineEmits<{
         :value="sortKey"
         :disabled="!hasMedia"
         aria-label="정렬 기준"
-        @change="emit('set-sort', ($event.target as HTMLSelectElement).value as MediaSortKey)"
+        @change="
+          emit(
+            'set-sort',
+            ($event.target as HTMLSelectElement).value as MediaSortKey,
+          )
+        "
       >
         <option value="name">이름</option>
         <option value="size">크기</option>
@@ -99,8 +126,15 @@ const emit = defineEmits<{
 
     <span class="app-toolbar__separator" aria-hidden="true" />
 
+    <button type="button" title="WebSee 옵션" @click="emit('show-options')">
+      <SvgIcon class="app-toolbar__icon" name="options" />
+      <span>옵션</span>
+    </button>
+
+    <span class="app-toolbar__separator" aria-hidden="true" />
+
     <button type="button" title="단축키와 사용 방법" @click="emit('show-help')">
-      <span class="app-toolbar__icon" aria-hidden="true">?</span>
+      <SvgIcon class="app-toolbar__icon" name="help" />
       <span>도움말</span>
     </button>
   </div>
@@ -140,8 +174,8 @@ const emit = defineEmits<{
       padding-top: 3px;
       padding-bottom: 1px;
       background: var(--color-pressed);
-      border-color: var(--color-shadow-dark) var(--color-light) var(--color-light)
-        var(--color-shadow-dark);
+      border-color: var(--color-shadow-dark) var(--color-light)
+        var(--color-light) var(--color-shadow-dark);
     }
 
     &:disabled {
@@ -182,7 +216,6 @@ const emit = defineEmits<{
     padding: 0 !important;
     font-size: 17px !important;
   }
-
 }
 
 @media (max-width: 760px) {

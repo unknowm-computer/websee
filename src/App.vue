@@ -2,7 +2,9 @@
 import { computed, nextTick, onBeforeUnmount, onMounted, reactive, ref, shallowRef, watch } from 'vue'
 
 import AppToolbar from '@/components/app/AppToolbar.vue'
+import BatchTranslationDialog from '@/components/app/BatchTranslationDialog.vue'
 import HelpDialog from '@/components/app/HelpDialog.vue'
+import OptionsDialog from '@/components/app/OptionsDialog.vue'
 import StatusBar from '@/components/app/StatusBar.vue'
 import FileList from '@/components/browser/FileList.vue'
 import FolderTree from '@/components/browser/FolderTree.vue'
@@ -13,6 +15,7 @@ import SvgIcon from '@/components/common/SvgIcon.vue'
 import ImageViewer from '@/components/viewer/ImageViewer.vue'
 import TextViewer from '@/components/viewer/TextViewer.vue'
 import { useImageDimensions } from '@/composables/useImageDimensions'
+import { useBatchImageTranslation } from '@/composables/useBatchImageTranslation'
 import { useObjectUrls } from '@/composables/useObjectUrls'
 import { useResizableMediaPanes } from '@/composables/useResizableMediaPanes'
 import {
@@ -23,6 +26,17 @@ import {
   loadSelectedFiles,
 } from '@/services/mediaSources'
 import { createImageThumbnail } from '@/services/imageThumbnail'
+import { createBatchTranslationRun } from '@/services/imageTranslation/batchTranslationSources'
+import {
+  loadTranslationSidecar,
+  requestTranslationSidecarPermission,
+  saveTranslationSidecar,
+  type TranslationSidecarTarget,
+} from '@/services/imageTranslation/translationSidecar'
+import type { ImageTranslationResult } from '@/types/imageTranslation'
+import type {
+  BatchTranslationOptions,
+} from '@/types/batchTranslation'
 import type {
   ArchiveIndex,
   MediaCollection,
@@ -65,6 +79,8 @@ const archiveIndexingCompleted = ref(0)
 const archiveIndexingTotal = ref(0)
 const initialSlideshow = ref(false)
 const helpOpen = ref(false)
+const optionsOpen = ref(false)
+const batchTranslationDialogOpen = ref(false)
 const loading = ref(false)
 const loadingMessage = ref('파일을 읽는 중입니다...')
 const errorMessage = ref('')
@@ -107,6 +123,15 @@ const archiveThumbnailUrls = reactive(new Map<string, string>())
 
 const { getUrl, revokeAll, revokeItems } = useObjectUrls()
 const { ensureDimensions } = useImageDimensions(getUrl)
+const {
+  active: batchTranslationActive,
+  continueTranslation: continueBatchTranslation,
+  pause: pauseBatchTranslation,
+  resume: resumeBatchTranslation,
+  start: startBatchTranslation,
+  state: batchTranslationState,
+  stop: stopBatchTranslation,
+} = useBatchImageTranslation()
 const {
   endResize,
   paneStyle,
@@ -262,6 +287,28 @@ const selectedTextPreviewItem = computed(() => {
 const canOpenViewer = computed(() => browserItems.value.length > 0)
 const canRefreshCollection = computed(() =>
   Boolean(currentDirectoryHandle.value || collection.value?.kind === 'folder'),
+)
+const batchSourceItems = computed(() =>
+  (collection.value?.items ?? []).filter(
+    (item) => item.directoryPath === selectedDirectory.value
+      && (item.kind === 'image' || item.kind === 'archive'),
+  ),
+)
+const batchImageCount = computed(() =>
+  batchSourceItems.value.filter((item) => item.kind === 'image').length,
+)
+const batchArchiveCount = computed(() =>
+  batchSourceItems.value.filter((item) => item.kind === 'archive').length,
+)
+const batchFolderLabel = computed(() =>
+  selectedDirectoryNode.value?.name ?? collection.value?.name ?? '현재 폴더',
+)
+const canBatchTranslate = computed(() =>
+  batchTranslationActive.value
+  || Boolean(
+    directoryHandleCache.get(selectedDirectory.value)
+    && (batchImageCount.value > 0 || batchArchiveCount.value > 0),
+  ),
 )
 
 function readViewMode(): MediaViewMode {
@@ -1186,6 +1233,67 @@ function requestDimensions(item: MediaItem): void {
   if (item.kind === 'image') void ensureDimensions(item)
 }
 
+function getTranslationSidecarTarget(item: MediaItem): TranslationSidecarTarget | undefined {
+  if (item.kind === 'image') {
+    const directoryHandle = directoryHandleCache.get(item.directoryPath)
+    return directoryHandle
+      ? { directoryHandle, sourceItem: item }
+      : undefined
+  }
+
+  if (item.kind !== 'archive-entry') return undefined
+  const sourceItem = archiveOuterItemId.value
+    ? collection.value?.items.find((candidate) => candidate.id === archiveOuterItemId.value)
+    : undefined
+  if (!sourceItem) return undefined
+  const directoryHandle = directoryHandleCache.get(sourceItem.directoryPath)
+  return directoryHandle
+    ? { directoryHandle, sourceItem, archiveEntryPath: item.path }
+    : undefined
+}
+
+async function loadSavedTranslation(
+  item: MediaItem,
+): Promise<ImageTranslationResult | undefined> {
+  const target = getTranslationSidecarTarget(item)
+  return target ? await loadTranslationSidecar(target, item) : undefined
+}
+
+async function prepareTranslationPersistence(item: MediaItem): Promise<boolean> {
+  const target = getTranslationSidecarTarget(item)
+  return target ? await requestTranslationSidecarPermission(target) : false
+}
+
+async function saveTranslation(
+  item: MediaItem,
+  result: ImageTranslationResult,
+): Promise<void> {
+  const target = getTranslationSidecarTarget(item)
+  if (!target) throw new Error('번역 결과를 저장할 원본 폴더 핸들이 없습니다.')
+  await saveTranslationSidecar(target, item, result)
+}
+
+function createCurrentBatchTranslationRun(options: BatchTranslationOptions) {
+  const directoryHandle = directoryHandleCache.get(selectedDirectory.value)
+  if (!directoryHandle) return undefined
+
+  return createBatchTranslationRun({
+    directoryHandle,
+    folderLabel: batchFolderLabel.value,
+    items: batchSourceItems.value,
+    translationOptions: options,
+  })
+}
+
+function handleStartBatchTranslation(options: BatchTranslationOptions): void {
+  const run = createCurrentBatchTranslationRun(options)
+  if (!run) {
+    showError('현재 폴더에서 일괄 번역할 이미지나 압축파일을 찾지 못했습니다.')
+    return
+  }
+  void startBatchTranslation(run)
+}
+
 function setViewMode(mode: MediaViewMode): void {
   viewMode.value = mode
 }
@@ -1221,6 +1329,19 @@ function handleBrowserKeydown(event: KeyboardEvent): void {
     if (event.key === 'Enter' && !(target instanceof HTMLButtonElement)) {
       event.preventDefault()
       closeViewer()
+    }
+    return
+  }
+
+  if (optionsOpen.value) {
+    if (event.key === 'Escape') optionsOpen.value = false
+    return
+  }
+
+  if (batchTranslationDialogOpen.value) {
+    if (event.key === 'Escape') {
+      event.preventDefault()
+      if (!batchTranslationActive.value) batchTranslationDialogOpen.value = false
     }
     return
   }
@@ -1287,6 +1408,8 @@ onBeforeUnmount(() => {
     @drop.prevent="handleDrop"
   >
     <AppToolbar
+      :batch-active="batchTranslationActive"
+      :can-batch-translate="canBatchTranslate"
       :can-refresh="canRefreshCollection"
       :has-media="Boolean(collection?.items.length)"
       :sort-ascending="sortAscending"
@@ -1296,9 +1419,11 @@ onBeforeUnmount(() => {
       @open-images="imageInput?.click()"
       @open-archive="archiveInput?.click()"
       @refresh="refreshCollection"
+      @show-batch-translation="batchTranslationDialogOpen = true"
       @set-view="setViewMode"
       @set-sort="setSortKey"
       @toggle-sort-direction="sortAscending = !sortAscending"
+      @show-options="optionsOpen = true"
       @show-help="helpOpen = true"
     />
 
@@ -1461,6 +1586,10 @@ onBeforeUnmount(() => {
       :current-id="viewerCurrentId"
       :get-url="getUrl"
       :initial-slideshow="initialSlideshow"
+      :load-saved-translation="loadSavedTranslation"
+      :prepare-translation-persistence="prepareTranslationPersistence"
+      :save-translation="saveTranslation"
+      :translation-disabled="batchTranslationActive"
       @close="closeViewer"
       @select="selectViewerItem"
       @dimensions="updateDimensions"
@@ -1473,6 +1602,25 @@ onBeforeUnmount(() => {
     />
 
     <HelpDialog v-if="helpOpen" @close="helpOpen = false" />
+    <OptionsDialog
+      v-if="optionsOpen"
+      :translation-directory-handle="directoryHandleCache.get(selectedDirectory)"
+      :translation-folder-label="batchFolderLabel"
+      :translation-management-disabled="batchTranslationActive"
+      @close="optionsOpen = false"
+    />
+    <BatchTranslationDialog
+      v-if="batchTranslationDialogOpen"
+      :archive-count="batchArchiveCount"
+      :image-count="batchImageCount"
+      :state="batchTranslationState"
+      @close="batchTranslationDialogOpen = false"
+      @continue="continueBatchTranslation"
+      @pause="pauseBatchTranslation"
+      @resume="resumeBatchTranslation"
+      @start="handleStartBatchTranslation"
+      @stop="stopBatchTranslation"
+    />
   </main>
 </template>
 

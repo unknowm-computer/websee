@@ -6,6 +6,7 @@ import arrowDownUrl from '@/images/icons/arrow_down.svg'
 import arrowLeftUrl from '@/images/icons/arrow_left.svg'
 import arrowRightUrl from '@/images/icons/arrow_right.svg'
 import arrowUpUrl from '@/images/icons/arrow_up.svg'
+import autoUrl from '@/images/icons/auto.svg'
 import closeUrl from '@/images/icons/close.svg'
 import docsUrl from '@/images/icons/docs.svg'
 import fileUrl from '@/images/icons/file.svg'
@@ -15,8 +16,11 @@ import folderUrl from '@/images/icons/folder.svg'
 import folderOpenUrl from '@/images/icons/folder_open.svg'
 import folderZipUrl from '@/images/icons/folder_zip.svg'
 import gridUrl from '@/images/icons/grid.svg'
+import helpUrl from '@/images/icons/help.svg'
+import translateUrl from '@/images/icons/g_translate.svg'
 import imageUrl from '@/images/icons/image.svg'
 import listUrl from '@/images/icons/list.svg'
+import optionsUrl from '@/images/icons/options.svg'
 import playUrl from '@/images/icons/play.svg'
 import refreshUrl from '@/images/icons/refresh.svg'
 import removeUrl from '@/images/icons/remove.svg'
@@ -30,6 +34,7 @@ const iconUrls = {
   'arrow-left': arrowLeftUrl,
   'arrow-right': arrowRightUrl,
   'arrow-up': arrowUpUrl,
+  auto: autoUrl,
   close: closeUrl,
   docs: docsUrl,
   file: fileUrl,
@@ -39,8 +44,11 @@ const iconUrls = {
   'folder-open': folderOpenUrl,
   'folder-zip': folderZipUrl,
   grid: gridUrl,
+  help: helpUrl,
+  translate: translateUrl,
   image: imageUrl,
   list: listUrl,
+  options: optionsUrl,
   play: playUrl,
   refresh: refreshUrl,
   remove: removeUrl,
