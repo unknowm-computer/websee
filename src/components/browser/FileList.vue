@@ -2,11 +2,12 @@
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 
 import SvgIcon from '@/components/common/SvgIcon.vue'
-import type { MediaItem } from '@/types/media'
+import type { MediaItem, MediaListColumnKey, MediaListColumnVisibility } from '@/types/media'
 import { formatBytes, getExtension } from '@/utils/media'
 
 interface Props {
   items: MediaItem[]
+  columns: MediaListColumnVisibility
   selectedId?: string
 }
 
@@ -20,6 +21,13 @@ const emit = defineEmits<{
 
 const ROW_HEIGHT = 29
 const OVERSCAN = 8
+const NAME_COLUMN_MIN_WIDTH = 300
+const OPTIONAL_COLUMN_WIDTHS: Record<MediaListColumnKey, number> = {
+  size: 100,
+  format: 92,
+  resolution: 130,
+  modified: 150,
+}
 
 const container = ref<HTMLElement>()
 const scrollTop = ref(0)
@@ -41,6 +49,22 @@ const visibleItems = computed(() =>
     top: (startIndex.value + offset) * ROW_HEIGHT,
   })),
 )
+const gridTemplateColumns = computed(() => [
+  'minmax(220px, 1fr)',
+  ...(props.columns.size ? [`${OPTIONAL_COLUMN_WIDTHS.size}px`] : []),
+  ...(props.columns.format ? [`${OPTIONAL_COLUMN_WIDTHS.format}px`] : []),
+  ...(props.columns.resolution ? [`${OPTIONAL_COLUMN_WIDTHS.resolution}px`] : []),
+  ...(props.columns.modified ? [`${OPTIONAL_COLUMN_WIDTHS.modified}px`] : []),
+].join(' '))
+const minimumTrackWidth = computed(() =>
+  NAME_COLUMN_MIN_WIDTH
+  + Object.entries(props.columns).reduce(
+    (width, [column, visible]) => width + (visible
+      ? OPTIONAL_COLUMN_WIDTHS[column as MediaListColumnKey]
+      : 0),
+    0,
+  ),
+)
 
 function updateViewport(): void {
   viewportHeight.value = container.value?.clientHeight ?? 0
@@ -56,6 +80,23 @@ function getFileIconLabel(item: MediaItem): string {
   if (extension === 'webp') return 'WEB'
   if (extension === 'avif') return 'AVF'
   return extension.slice(0, 3).toUpperCase()
+}
+
+function formatModifiedDate(item: MediaItem): string {
+  if (
+    item.kind === 'folder'
+    || item.kind === 'folder-parent'
+    || item.kind === 'archive-parent'
+    || item.kind === 'archive-entry'
+    || item.kind === 'archive-text-entry'
+    || !item.lastModified
+  ) return '—'
+
+  const date = new Date(item.lastModified)
+  if (Number.isNaN(date.getTime())) return '—'
+
+  const pad = (value: number): string => String(value).padStart(2, '0')
+  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())} ${pad(date.getHours())}:${pad(date.getMinutes())}`
 }
 
 function scrollSelectedItemIntoView(selectedId?: string): void {
@@ -114,21 +155,32 @@ onBeforeUnmount(() => resizeObserver?.disconnect())
 
 <template>
   <div class="file-list">
-    <div class="file-list__header" aria-hidden="true">
+    <div
+      class="file-list__header"
+      :style="{ gridTemplateColumns }"
+      aria-hidden="true"
+    >
       <span>파일명</span>
-      <span>크기</span>
-      <span>형식</span>
-      <span>해상도</span>
+      <span v-if="columns.size">크기</span>
+      <span v-if="columns.format">형식</span>
+      <span v-if="columns.resolution">해상도</span>
+      <span v-if="columns.modified">수정일</span>
     </div>
     <div ref="container" class="file-list__body" tabindex="0" @scroll="handleScroll">
-      <div class="file-list__track" :style="{ height: `${items.length * ROW_HEIGHT}px` }">
+      <div
+        class="file-list__track"
+        :style="{
+          height: `${items.length * ROW_HEIGHT}px`,
+          minWidth: `${minimumTrackWidth}px`,
+        }"
+      >
         <button
           v-for="entry in visibleItems"
           :key="entry.item.id"
           type="button"
           class="file-list__row"
           :class="{ 'is-selected': selectedId === entry.item.id }"
-          :style="{ top: `${entry.top}px` }"
+          :style="{ top: `${entry.top}px`, gridTemplateColumns }"
           :title="entry.item.path"
           @click="emit('select', entry.item.id)"
           @dblclick="emit('open', entry.item.id)"
@@ -160,17 +212,18 @@ onBeforeUnmount(() => resizeObserver?.disconnect())
             />
             {{ entry.item.name }}
           </span>
-          <span>
+          <span v-if="columns.size">
             {{ entry.item.kind === 'archive-parent' || entry.item.kind === 'folder' || entry.item.kind === 'folder-parent' ? '—' : formatBytes(entry.item.size) }}
           </span>
-          <span>{{ entry.item.format }}</span>
-          <span>
+          <span v-if="columns.format">{{ entry.item.format }}</span>
+          <span v-if="columns.resolution">
             {{ entry.item.width && entry.item.height
               ? `${entry.item.width} × ${entry.item.height}`
               : entry.item.kind === 'image' || (entry.item.kind === 'archive-entry' && selectedId === entry.item.id)
                 ? '해상도 확인 중'
                 : '—' }}
           </span>
+          <span v-if="columns.modified">{{ formatModifiedDate(entry.item) }}</span>
         </button>
       </div>
     </div>
@@ -188,7 +241,6 @@ onBeforeUnmount(() => resizeObserver?.disconnect())
   &__header,
   &__row {
     display: grid;
-    grid-template-columns: minmax(220px, 1fr) 100px 92px 130px;
     align-items: center;
   }
 
@@ -213,7 +265,6 @@ onBeforeUnmount(() => resizeObserver?.disconnect())
 
   &__track {
     position: relative;
-    min-width: 620px;
   }
 
   &__row {

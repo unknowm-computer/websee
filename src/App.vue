@@ -42,6 +42,8 @@ import type {
   MediaCollection,
   MediaDirectoryNode,
   MediaItem,
+  MediaListColumnKey,
+  MediaListColumnVisibility,
   MediaSortKey,
   MediaViewMode,
 } from '@/types/media'
@@ -54,12 +56,21 @@ import {
   sortMediaItems,
 } from '@/utils/media'
 
+const FILE_LIST_COLUMNS_STORAGE_KEY = 'websee-file-list-columns'
+const DEFAULT_FILE_LIST_COLUMNS = {
+  size: true,
+  format: true,
+  resolution: true,
+  modified: true,
+} satisfies MediaListColumnVisibility
+
 const collection = ref<MediaCollection>()
 const selectedDirectory = ref('')
 const selectedItemId = ref<string>()
 const viewMode = ref<MediaViewMode>(readViewMode())
 const sortKey = ref<MediaSortKey>(readSortKey())
 const sortAscending = ref(readBooleanPreference('websee-sort-ascending', true))
+const fileListColumns = reactive<MediaListColumnVisibility>(readFileListColumns())
 const viewerOpen = ref(false)
 const textViewerItem = ref<MediaItem>()
 const viewerItems = ref<MediaItem[]>([])
@@ -323,6 +334,36 @@ function readSortKey(): MediaSortKey {
 function readBooleanPreference(key: string, fallback: boolean): boolean {
   const value = localStorage.getItem(key)
   return value === null ? fallback : value === 'true'
+}
+
+function readFileListColumns(): MediaListColumnVisibility {
+  const storedValue = localStorage.getItem(FILE_LIST_COLUMNS_STORAGE_KEY)
+  if (!storedValue) return { ...DEFAULT_FILE_LIST_COLUMNS }
+
+  try {
+    const parsed: unknown = JSON.parse(storedValue)
+    if (typeof parsed !== 'object' || parsed === null) {
+      return { ...DEFAULT_FILE_LIST_COLUMNS }
+    }
+
+    const storedColumns = parsed as Record<string, unknown>
+    return {
+      size: typeof storedColumns.size === 'boolean'
+        ? storedColumns.size
+        : DEFAULT_FILE_LIST_COLUMNS.size,
+      format: typeof storedColumns.format === 'boolean'
+        ? storedColumns.format
+        : DEFAULT_FILE_LIST_COLUMNS.format,
+      resolution: typeof storedColumns.resolution === 'boolean'
+        ? storedColumns.resolution
+        : DEFAULT_FILE_LIST_COLUMNS.resolution,
+      modified: typeof storedColumns.modified === 'boolean'
+        ? storedColumns.modified
+        : DEFAULT_FILE_LIST_COLUMNS.modified,
+    }
+  } catch {
+    return { ...DEFAULT_FILE_LIST_COLUMNS }
+  }
 }
 
 function findDirectoryNode(
@@ -1302,6 +1343,10 @@ function setSortKey(key: MediaSortKey): void {
   sortKey.value = key
 }
 
+function setFileListColumn(column: MediaListColumnKey, visible: boolean): void {
+  fileListColumns[column] = visible
+}
+
 function moveSelection(delta: number): void {
   if (!browserItems.value.length) return
   const currentIndex = browserItems.value.findIndex((item) => item.id === browserSelectedId.value)
@@ -1391,6 +1436,11 @@ function handleBrowserKeydown(event: KeyboardEvent): void {
 watch(viewMode, (value) => localStorage.setItem('websee-view-mode', value))
 watch(sortKey, (value) => localStorage.setItem('websee-sort-key', value))
 watch(sortAscending, (value) => localStorage.setItem('websee-sort-ascending', String(value)))
+watch(
+  fileListColumns,
+  (value) => localStorage.setItem(FILE_LIST_COLUMNS_STORAGE_KEY, JSON.stringify(value)),
+  { deep: true },
+)
 
 onMounted(() => window.addEventListener('keydown', handleBrowserKeydown))
 onBeforeUnmount(() => {
@@ -1510,6 +1560,7 @@ onBeforeUnmount(() => {
         <FileList
           v-else
           :items="browserItems"
+          :columns="fileListColumns"
           :selected-id="browserSelectedId"
           @select="selectBrowserItem"
           @open="openViewer"
@@ -1604,10 +1655,12 @@ onBeforeUnmount(() => {
     <HelpDialog v-if="helpOpen" @close="helpOpen = false" />
     <OptionsDialog
       v-if="optionsOpen"
+      :file-list-columns="fileListColumns"
       :translation-directory-handle="directoryHandleCache.get(selectedDirectory)"
       :translation-folder-label="batchFolderLabel"
       :translation-management-disabled="batchTranslationActive"
       @close="optionsOpen = false"
+      @set-file-list-column="setFileListColumn"
     />
     <BatchTranslationDialog
       v-if="batchTranslationDialogOpen"

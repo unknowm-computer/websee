@@ -6,6 +6,10 @@ export type MediaViewMode = 'grid' | 'list'
 
 export type MediaSortKey = 'name' | 'size' | 'format' | 'modified'
 
+export type MediaListColumnKey = 'size' | 'format' | 'resolution' | 'modified'
+
+export type MediaListColumnVisibility = Record<MediaListColumnKey, boolean>
+
 export type MediaTreeNodeKind = 'folder' | 'archive' | 'archive-directory'
 
 export type MediaItemKind =

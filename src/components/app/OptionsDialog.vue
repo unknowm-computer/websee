@@ -18,9 +18,14 @@ import {
   scanTranslationSidecars,
   type TranslationSidecarSummary,
 } from "@/services/imageTranslation/translationSidecarManagement";
+import type {
+  MediaListColumnKey,
+  MediaListColumnVisibility,
+} from "@/types/media";
 import { formatBytes } from "@/utils/media";
 
 interface Props {
+  fileListColumns: MediaListColumnVisibility;
   translationDirectoryHandle?: FileSystemDirectoryHandle;
   translationFolderLabel?: string;
   translationManagementDisabled?: boolean;
@@ -36,7 +41,18 @@ const props = withDefaults(defineProps<Props>(), {
 
 const emit = defineEmits<{
   (event: "close"): void;
+  (event: "set-file-list-column", column: MediaListColumnKey, visible: boolean): void;
 }>();
+
+const fileListColumnOptions: ReadonlyArray<{
+  key: MediaListColumnKey;
+  label: string;
+}> = [
+  { key: "size", label: "크기" },
+  { key: "format", label: "형식" },
+  { key: "resolution", label: "해상도" },
+  { key: "modified", label: "수정일" },
+];
 
 const cachedData = ref<CachedTranslationModelData>({ bytes: 0, count: 0 });
 const modelLoading = ref(true);
@@ -98,6 +114,12 @@ const translationActionsDisabled = computed(
 
 function requestClose(): void {
   if (!dialogBusy.value) emit("close");
+}
+
+function setFileListColumn(column: MediaListColumnKey, event: Event): void {
+  const checkbox = event.currentTarget;
+  if (!(checkbox instanceof HTMLInputElement)) return;
+  emit("set-file-list-column", column, checkbox.checked);
 }
 
 async function refreshCachedData(): Promise<void> {
@@ -237,6 +259,21 @@ onMounted(() => {
       </header>
 
       <div class="options-dialog__body">
+        <section aria-labelledby="file-list-columns-title">
+          <h2 id="file-list-columns-title">파일 목록 표시 항목</h2>
+          <p>목록 보기에서 파일명 옆에 표시할 정보를 선택합니다. 파일명은 항상 표시됩니다.</p>
+          <div class="options-dialog__checkboxes">
+            <label v-for="option in fileListColumnOptions" :key="option.key">
+              <input
+                type="checkbox"
+                :checked="fileListColumns[option.key]"
+                @change="setFileListColumn(option.key, $event)"
+              />
+              <span>{{ option.label }}</span>
+            </label>
+          </div>
+        </section>
+
         <section aria-labelledby="translation-model-title">
           <h2 id="translation-model-title">이미지 번역 모델</h2>
           <p>
@@ -428,6 +465,21 @@ onMounted(() => {
     > button,
     > div {
       flex: 0 0 auto;
+    }
+  }
+
+  &__checkboxes {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 8px 16px;
+    padding: 9px;
+    background: var(--color-face);
+    border: 1px solid var(--color-shadow);
+
+    label {
+      display: flex;
+      gap: 7px;
+      align-items: center;
     }
   }
 
