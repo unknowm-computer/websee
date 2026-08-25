@@ -467,6 +467,7 @@ onBeforeUnmount(() => {
       <button
         type="button"
         title="이전 이미지"
+        aria-label="이전 이미지"
         :disabled="!canMovePrevious"
         @click="moveBy(-1)"
       >
@@ -476,91 +477,123 @@ onBeforeUnmount(() => {
       <button
         type="button"
         title="다음 이미지"
+        aria-label="다음 이미지"
         :disabled="!canMoveNext"
         @click="moveBy(1)"
       >
         <SvgIcon name="arrow-right" :size="20" />
       </button>
       <span class="image-viewer__separator" />
-      <button type="button" title="축소 (-)" @click="changeZoom(1 / 1.2)">
+      <button
+        type="button"
+        title="축소 (-)"
+        aria-label="축소"
+        @click="changeZoom(1 / 1.2)"
+      >
         <SvgIcon name="remove" :size="20" />
       </button>
       <span class="image-viewer__zoom">{{ zoomPercent }}%</span>
-      <button type="button" title="확대 (+)" @click="changeZoom(1.2)">
+      <button
+        type="button"
+        title="확대 (+)"
+        aria-label="확대"
+        @click="changeZoom(1.2)"
+      >
         <SvgIcon name="add" :size="20" />
       </button>
       <button
         type="button"
+        aria-label="화면 맞춤"
         :class="{ 'is-pressed': zoomMode === 'fit' }"
         @click="setZoomMode('fit')"
       >
         <SvgIcon name="fit-screen" :size="20" />
-        화면 맞춤
+        <span class="image-viewer__button-label">화면 맞춤</span>
       </button>
       <button
         type="button"
+        aria-label="폭 맞춤"
         :class="{ 'is-pressed': zoomMode === 'width' }"
         @click="setZoomMode('width')"
       >
         <SvgIcon name="fit-width" :size="20" />
-        폭 맞춤
+        <span class="image-viewer__button-label">폭 맞춤</span>
       </button>
       <button
         type="button"
+        aria-label="실제 크기 (100%)"
         :class="{ 'is-pressed': zoomMode === 'actual' }"
         @click="setZoomMode('actual')"
       >
-        100%
+        <SvgIcon name="real-size" :size="20" />
+        <span class="image-viewer__button-label">100%</span>
       </button>
       <span class="image-viewer__separator" />
       <button
         type="button"
         title="시계 방향으로 회전 (R)"
+        aria-label="시계 방향으로 회전"
         @click="rotateClockwise"
       >
         <SvgIcon name="rotate" :size="20" />
-        회전
+        <span class="image-viewer__button-label">회전</span>
       </button>
       <button
         type="button"
-        :title="translationDisabled ? '폴더 일괄 번역이 진행 중입니다.' : '현재 이미지의 일본어·중국어·영어를 한국어로 번역'"
+        :aria-label="translationButtonLabel"
+        :title="
+          translationDisabled
+            ? '폴더 일괄 번역이 진행 중입니다.'
+            : '현재 이미지의 일본어·중국어·영어를 한국어로 번역'
+        "
         :disabled="!currentItem || imageFailed || translationDisabled"
         @click="currentItem && toggleImageTranslation(currentItem)"
       >
         <SvgIcon name="translate" :size="20" />
-        {{ translationButtonLabel }}
+        <span class="image-viewer__button-label">
+          {{ translationButtonLabel }}
+        </span>
       </button>
       <button
         type="button"
+        :aria-label="slideshowActive ? '슬라이드쇼 정지' : '슬라이드쇼 시작'"
         :class="{ 'is-pressed': slideshowActive }"
         :aria-pressed="slideshowActive"
         @click="slideshowActive = !slideshowActive"
       >
-        <template v-if="slideshowActive">❚❚ 정지</template>
-        <template v-else>
-          <SvgIcon name="play" :size="18" />
-          슬라이드쇼
-        </template>
+        <span
+          v-if="slideshowActive"
+          class="image-viewer__slideshow-icon"
+          aria-hidden="true"
+        >
+          ❚❚
+        </span>
+        <SvgIcon v-else name="play" :size="18" />
+        <span class="image-viewer__button-label">
+          {{ slideshowActive ? "정지" : "슬라이드쇼" }}
+        </span>
       </button>
       <button
         type="button"
         title="전체화면 (F)"
+        :aria-label="isFullscreen ? '전체화면 종료' : '전체화면 시작'"
         :class="{ 'is-pressed': isFullscreen }"
         :aria-pressed="isFullscreen"
         @click="toggleFullscreen"
       >
         <SvgIcon :name="isFullscreen ? 'zoom-out' : 'zoom-in'" :size="20" />
-        전체화면
+        <span class="image-viewer__button-label">전체화면</span>
       </button>
       <span class="image-viewer__align-left"></span>
       <span class="image-viewer__separator" />
       <button
         type="button"
         title="브라우저로 돌아가기 (Enter 또는 Esc)"
+        aria-label="이미지 뷰어 닫기"
         @click="emit('close')"
       >
         <SvgIcon name="close" :size="20" />
-        닫기
+        <span class="image-viewer__button-label">닫기</span>
       </button>
     </header>
 
@@ -684,6 +717,15 @@ onBeforeUnmount(() => {
     white-space: nowrap;
     background: var(--color-face);
     border-bottom: 1px solid #111;
+
+    container-type: inline-size;
+    container-name: imageViewerToolbar;
+
+    @container imageViewerToolbar (max-width: 1000px) {
+      .image-viewer__button-label {
+        display: none;
+      }
+    }
 
     button {
       display: inline-flex;

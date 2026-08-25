@@ -1,48 +1,49 @@
 <script setup lang="ts">
-import { computed, type CSSProperties } from 'vue'
+import { computed, type CSSProperties } from "vue";
 
-import addUrl from '@/images/icons/add.svg'
-import arrowDownUrl from '@/images/icons/arrow_down.svg'
-import arrowLeftUrl from '@/images/icons/arrow_left.svg'
-import arrowRightUrl from '@/images/icons/arrow_right.svg'
-import arrowUpUrl from '@/images/icons/arrow_up.svg'
-import autoUrl from '@/images/icons/auto.svg'
-import closeUrl from '@/images/icons/close.svg'
-import docsUrl from '@/images/icons/docs.svg'
-import fileUrl from '@/images/icons/file.svg'
-import fitScreenUrl from '@/images/icons/fit_screen.svg'
-import fitWidthUrl from '@/images/icons/fit_width.svg'
-import folderUrl from '@/images/icons/folder.svg'
-import folderOpenUrl from '@/images/icons/folder_open.svg'
-import folderZipUrl from '@/images/icons/folder_zip.svg'
-import gridUrl from '@/images/icons/grid.svg'
-import helpUrl from '@/images/icons/help.svg'
-import translateUrl from '@/images/icons/g_translate.svg'
-import imageUrl from '@/images/icons/image.svg'
-import listUrl from '@/images/icons/list.svg'
-import optionsUrl from '@/images/icons/options.svg'
-import playUrl from '@/images/icons/play.svg'
-import refreshUrl from '@/images/icons/refresh.svg'
-import removeUrl from '@/images/icons/remove.svg'
-import rotateUrl from '@/images/icons/rotate.svg'
-import zoomInUrl from '@/images/icons/zoom_in.svg'
-import zoomOutUrl from '@/images/icons/zoom_out.svg'
+import addUrl from "@/images/icons/add.svg";
+import arrowDownUrl from "@/images/icons/arrow_down.svg";
+import arrowLeftUrl from "@/images/icons/arrow_left.svg";
+import arrowRightUrl from "@/images/icons/arrow_right.svg";
+import arrowUpUrl from "@/images/icons/arrow_up.svg";
+import autoUrl from "@/images/icons/auto.svg";
+import closeUrl from "@/images/icons/close.svg";
+import docsUrl from "@/images/icons/docs.svg";
+import fileUrl from "@/images/icons/file.svg";
+import fitScreenUrl from "@/images/icons/fit_screen.svg";
+import fitWidthUrl from "@/images/icons/fit_width.svg";
+import folderUrl from "@/images/icons/folder.svg";
+import folderOpenUrl from "@/images/icons/folder_open.svg";
+import folderZipUrl from "@/images/icons/folder_zip.svg";
+import translateUrl from "@/images/icons/g_translate.svg";
+import gridUrl from "@/images/icons/grid.svg";
+import helpUrl from "@/images/icons/help.svg";
+import imageUrl from "@/images/icons/image.svg";
+import listUrl from "@/images/icons/list.svg";
+import optionsUrl from "@/images/icons/options.svg";
+import playUrl from "@/images/icons/play.svg";
+import realSizeUrl from "@/images/icons/real_size.svg";
+import refreshUrl from "@/images/icons/refresh.svg";
+import removeUrl from "@/images/icons/remove.svg";
+import rotateUrl from "@/images/icons/rotate.svg";
+import zoomInUrl from "@/images/icons/zoom_in.svg";
+import zoomOutUrl from "@/images/icons/zoom_out.svg";
 
 const iconUrls = {
   add: addUrl,
-  'arrow-down': arrowDownUrl,
-  'arrow-left': arrowLeftUrl,
-  'arrow-right': arrowRightUrl,
-  'arrow-up': arrowUpUrl,
+  "arrow-down": arrowDownUrl,
+  "arrow-left": arrowLeftUrl,
+  "arrow-right": arrowRightUrl,
+  "arrow-up": arrowUpUrl,
   auto: autoUrl,
   close: closeUrl,
   docs: docsUrl,
   file: fileUrl,
-  'fit-screen': fitScreenUrl,
-  'fit-width': fitWidthUrl,
+  "fit-screen": fitScreenUrl,
+  "fit-width": fitWidthUrl,
   folder: folderUrl,
-  'folder-open': folderOpenUrl,
-  'folder-zip': folderZipUrl,
+  "folder-open": folderOpenUrl,
+  "folder-zip": folderZipUrl,
   grid: gridUrl,
   help: helpUrl,
   translate: translateUrl,
@@ -53,28 +54,29 @@ const iconUrls = {
   refresh: refreshUrl,
   remove: removeUrl,
   rotate: rotateUrl,
-  'zoom-in': zoomInUrl,
-  'zoom-out': zoomOutUrl,
-} as const
+  "zoom-in": zoomInUrl,
+  "zoom-out": zoomOutUrl,
+  "real-size": realSizeUrl,
+} as const;
 
 interface Props {
-  name: keyof typeof iconUrls
-  size?: number
+  name: keyof typeof iconUrls;
+  size?: number;
 }
 
 const props = withDefaults(defineProps<Props>(), {
   size: 24,
-})
+});
 
 type IconStyle = CSSProperties & {
-  '--svg-icon-mask': string
-}
+  "--svg-icon-mask": string;
+};
 
 const iconStyle = computed<IconStyle>(() => ({
   width: `${props.size}px`,
   height: `${props.size}px`,
-  '--svg-icon-mask': `url("${iconUrls[props.name]}")`,
-}))
+  "--svg-icon-mask": `url("${iconUrls[props.name]}")`,
+}));
 </script>
 
 <template>
