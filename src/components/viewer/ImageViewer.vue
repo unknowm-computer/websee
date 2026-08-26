@@ -28,6 +28,7 @@ import {
   writeViewerEnhancementPreference,
   writeViewerTranslationOverlayPreference,
   writeViewerZoomPreference,
+  type ViewerSlideshowPreference,
   type ViewerZoomMode,
 } from "@/utils/viewerPreferences";
 
@@ -44,7 +45,9 @@ interface Props {
     item: MediaItem,
     result: ImageTranslationResult,
   ) => Promise<void>;
+  slideshowPreference: ViewerSlideshowPreference;
   translationDisabled?: boolean;
+  translationEnabled: boolean;
 }
 
 const props = withDefaults(defineProps<Props>(), {
@@ -81,7 +84,9 @@ const imageEnhancementEnabled = ref(
 const imageEnhancementMode = ref<"original" | "webgl" | "css">("original");
 const imageFailed = ref(false);
 const initialImageReady = ref(false);
-const slideshowActive = ref(props.initialSlideshow);
+const slideshowActive = ref(
+  props.slideshowPreference.enabled && props.initialSlideshow,
+);
 const isFullscreen = ref(false);
 const dragPointerId = ref<number>();
 const {
@@ -313,7 +318,9 @@ function disposeImageEnhancementRenderer(): void {
 }
 
 function waitForAnimationFrame(): Promise<void> {
-  return new Promise((resolve) => window.requestAnimationFrame(() => resolve()));
+  return new Promise((resolve) =>
+    window.requestAnimationFrame(() => resolve()),
+  );
 }
 
 async function renderImageEnhancement(
@@ -363,10 +370,7 @@ async function renderImageEnhancement(
 
 function toggleImageEnhancement(): void {
   imageEnhancementEnabled.value = !imageEnhancementEnabled.value;
-  writeViewerEnhancementPreference(
-    localStorage,
-    imageEnhancementEnabled.value,
-  );
+  writeViewerEnhancementPreference(localStorage, imageEnhancementEnabled.value);
   imageEnhancementRequest += 1;
 
   if (!imageEnhancementEnabled.value) {
@@ -385,14 +389,21 @@ function toggleImageEnhancement(): void {
 function handleEnhancementContextLost(): void {
   imageEnhancementRequest += 1;
   imageEnhancementRenderer = undefined;
-  imageEnhancementMode.value = imageEnhancementEnabled.value ? "css" : "original";
+  imageEnhancementMode.value = imageEnhancementEnabled.value
+    ? "css"
+    : "original";
 }
 
 function handleEnhancementContextRestored(): void {
   imageEnhancementRenderer = undefined;
   const image = imageElement.value;
   const item = currentItem.value;
-  if (imageEnhancementEnabled.value && image?.complete && image.naturalWidth && item) {
+  if (
+    imageEnhancementEnabled.value &&
+    image?.complete &&
+    image.naturalWidth &&
+    item
+  ) {
     void renderImageEnhancement(image, item.id);
   }
 }
@@ -530,13 +541,38 @@ function stopSlideshowTimer(): void {
   slideshowTimer = undefined;
 }
 
-function syncSlideshowTimer(): void {
-  stopSlideshowTimer();
-  if (!slideshowActive.value) return;
-  slideshowTimer = window.setInterval(() => moveBy(1), 3000);
+function advanceSlideshow(): void {
+  if (canMoveNext.value) {
+    moveBy(1);
+    return;
+  }
+  if (props.slideshowPreference.loop && props.items.length > 1) {
+    emit("select", props.items[0].id);
+    return;
+  }
+  slideshowActive.value = false;
 }
 
-watch(slideshowActive, syncSlideshowTimer);
+function syncSlideshowTimer(): void {
+  stopSlideshowTimer();
+  if (!props.slideshowPreference.enabled || !slideshowActive.value) return;
+  slideshowTimer = window.setInterval(
+    advanceSlideshow,
+    props.slideshowPreference.intervalSeconds * 1000,
+  );
+}
+
+watch(
+  [
+    slideshowActive,
+    () => props.slideshowPreference.enabled,
+    () => props.slideshowPreference.intervalSeconds,
+  ],
+  () => {
+    if (!props.slideshowPreference.enabled) slideshowActive.value = false;
+    syncSlideshowTimer();
+  },
+);
 watch(
   () => props.currentId,
   async () => {
@@ -647,23 +683,14 @@ onBeforeUnmount(() => {
       </button>
       <button
         type="button"
+        title="실제 크기 (100%)"
         aria-label="실제 크기 (100%)"
         :class="{ 'is-pressed': zoomMode === 'actual' }"
         @click="setZoomMode('actual')"
       >
         <SvgIcon name="real-size" :size="20" />
-        <span class="image-viewer__button-label">100%</span>
       </button>
       <span class="image-viewer__separator" />
-      <button
-        type="button"
-        title="시계 방향으로 회전 (R)"
-        aria-label="시계 방향으로 회전"
-        @click="rotateClockwise"
-      >
-        <SvgIcon name="rotate" :size="20" />
-        <span class="image-viewer__button-label">회전</span>
-      </button>
       <button
         type="button"
         :title="imageEnhancementButtonLabel"
@@ -680,6 +707,7 @@ onBeforeUnmount(() => {
         <span class="image-viewer__button-label">화질 개선</span>
       </button>
       <button
+        v-if="translationEnabled"
         type="button"
         :aria-label="translationButtonLabel"
         :title="
@@ -695,8 +723,20 @@ onBeforeUnmount(() => {
           {{ translationButtonLabel }}
         </span>
       </button>
+      <span class="image-viewer__separator" />
       <button
         type="button"
+        title="시계 방향으로 회전 (R)"
+        aria-label="시계 방향으로 회전"
+        @click="rotateClockwise"
+      >
+        <SvgIcon name="rotate" :size="20" />
+        <span class="image-viewer__button-label">회전</span>
+      </button>
+      <button
+        v-if="slideshowPreference.enabled"
+        type="button"
+        :title="slideshowActive ? '슬라이드쇼 정지' : '슬라이드쇼 시작'"
         :aria-label="slideshowActive ? '슬라이드쇼 정지' : '슬라이드쇼 시작'"
         :class="{ 'is-pressed': slideshowActive }"
         :aria-pressed="slideshowActive"
@@ -765,7 +805,8 @@ onBeforeUnmount(() => {
           :alt="currentItem.name"
           :class="{
             'is-webgl-source': imageEnhancementMode === 'webgl',
-            'is-css-enhanced': imageEnhancementEnabled && imageEnhancementMode === 'css',
+            'is-css-enhanced':
+              imageEnhancementEnabled && imageEnhancementMode === 'css',
           }"
           draggable="false"
           @load="handleImageLoad"

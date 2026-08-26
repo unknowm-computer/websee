@@ -9,6 +9,7 @@ interface Props {
   hasMedia: boolean;
   sortAscending: boolean;
   sortKey: MediaSortKey;
+  translationEnabled: boolean;
   viewMode: MediaViewMode;
 }
 
@@ -59,6 +60,7 @@ const emit = defineEmits<{
     <span class="app-toolbar__separator" aria-hidden="true" />
 
     <button
+      v-if="translationEnabled"
       type="button"
       :class="{ 'is-pressed': batchActive }"
       :aria-pressed="batchActive"
@@ -70,7 +72,11 @@ const emit = defineEmits<{
       <span>일괄 번역</span>
     </button>
 
-    <span class="app-toolbar__separator" aria-hidden="true" />
+    <span
+      v-if="translationEnabled"
+      class="app-toolbar__separator"
+      aria-hidden="true"
+    />
 
     <button
       type="button"

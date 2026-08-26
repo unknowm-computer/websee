@@ -1,12 +1,16 @@
 import { describe, expect, it } from 'vitest'
 
 import {
+  readTranslationEnabledPreference,
   readViewerEnhancementPreference,
+  readViewerSlideshowPreference,
   readViewerTranslationOverlayPreference,
   readViewerZoomPreference,
   writeViewerEnhancementPreference,
+  writeViewerSlideshowPreference,
   writeViewerTranslationOverlayPreference,
   writeViewerZoomPreference,
+  writeTranslationEnabledPreference,
 } from '@/utils/viewerPreferences'
 
 function createStorage(initialEntries: Record<string, string> = {}): Storage {
@@ -81,5 +85,66 @@ describe('viewer translation overlay preference', () => {
 
     writeViewerTranslationOverlayPreference(storage, true)
     expect(readViewerTranslationOverlayPreference(storage)).toBe(true)
+  })
+})
+
+describe('translation enabled preference', () => {
+  it('is disabled by default and ignores invalid values', () => {
+    expect(readTranslationEnabledPreference(createStorage())).toBe(false)
+    expect(readTranslationEnabledPreference(createStorage({
+      'websee-translation-enabled': 'yes',
+    }))).toBe(false)
+  })
+
+  it('stores and restores the enabled state', () => {
+    const storage = createStorage()
+
+    writeTranslationEnabledPreference(storage, true)
+    expect(readTranslationEnabledPreference(storage)).toBe(true)
+
+    writeTranslationEnabledPreference(storage, false)
+    expect(readTranslationEnabledPreference(storage)).toBe(false)
+  })
+})
+
+describe('viewer slideshow preference', () => {
+  it('is disabled with a three-second non-looping default', () => {
+    expect(readViewerSlideshowPreference(createStorage())).toEqual({
+      enabled: false,
+      intervalSeconds: 3,
+      loop: false,
+    })
+  })
+
+  it('ignores invalid stored values', () => {
+    const storage = createStorage({
+      'websee-viewer-slideshow': JSON.stringify({
+        enabled: 'yes',
+        intervalSeconds: 7,
+        loop: 1,
+      }),
+    })
+
+    expect(readViewerSlideshowPreference(storage)).toEqual({
+      enabled: false,
+      intervalSeconds: 3,
+      loop: false,
+    })
+  })
+
+  it('stores and restores slideshow settings', () => {
+    const storage = createStorage()
+
+    writeViewerSlideshowPreference(storage, {
+      enabled: true,
+      intervalSeconds: 5,
+      loop: true,
+    })
+
+    expect(readViewerSlideshowPreference(storage)).toEqual({
+      enabled: true,
+      intervalSeconds: 5,
+      loop: true,
+    })
   })
 })

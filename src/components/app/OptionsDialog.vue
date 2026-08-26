@@ -16,16 +16,27 @@ import type {
   MediaListColumnVisibility,
 } from "@/types/media";
 import { formatBytes } from "@/utils/media";
+import {
+  VIEWER_SLIDESHOW_INTERVAL_OPTIONS,
+  type ViewerSlideshowPreference,
+} from "@/utils/viewerPreferences";
 
 interface Props {
   fileListColumns: MediaListColumnVisibility;
+  slideshowPreference: ViewerSlideshowPreference;
+  translationEnabled: boolean;
 }
 
-defineProps<Props>();
+const props = defineProps<Props>();
 
 const emit = defineEmits<{
   (event: "close"): void;
   (event: "set-file-list-column", column: MediaListColumnKey, visible: boolean): void;
+  (
+    event: "update-slideshow-preference",
+    preference: ViewerSlideshowPreference,
+  ): void;
+  (event: "update-translation-enabled", enabled: boolean): void;
 }>();
 
 const fileListColumnOptions: ReadonlyArray<{
@@ -60,6 +71,44 @@ function setFileListColumn(column: MediaListColumnKey, event: Event): void {
   const checkbox = event.currentTarget;
   if (!(checkbox instanceof HTMLInputElement)) return;
   emit("set-file-list-column", column, checkbox.checked);
+}
+
+function updateSlideshowPreference(
+  patch: Partial<ViewerSlideshowPreference>,
+): void {
+  emit("update-slideshow-preference", {
+    ...props.slideshowPreference,
+    ...patch,
+  });
+}
+
+function setSlideshowEnabled(event: Event): void {
+  const checkbox = event.currentTarget;
+  if (!(checkbox instanceof HTMLInputElement)) return;
+  updateSlideshowPreference({ enabled: checkbox.checked });
+}
+
+function setSlideshowInterval(event: Event): void {
+  const select = event.currentTarget;
+  if (!(select instanceof HTMLSelectElement)) return;
+  const selectedInterval = Number.parseInt(select.value, 10);
+  const intervalSeconds = VIEWER_SLIDESHOW_INTERVAL_OPTIONS.find(
+    (option) => option === selectedInterval,
+  );
+  if (intervalSeconds === undefined) return;
+  updateSlideshowPreference({ intervalSeconds });
+}
+
+function setSlideshowLoop(event: Event): void {
+  const checkbox = event.currentTarget;
+  if (!(checkbox instanceof HTMLInputElement)) return;
+  updateSlideshowPreference({ loop: checkbox.checked });
+}
+
+function setTranslationEnabled(event: Event): void {
+  const checkbox = event.currentTarget;
+  if (!(checkbox instanceof HTMLInputElement)) return;
+  emit("update-translation-enabled", checkbox.checked);
 }
 
 async function refreshCachedData(): Promise<void> {
@@ -142,8 +191,66 @@ onMounted(() => {
           </div>
         </section>
 
-        <section aria-labelledby="translation-model-title">
-          <h2 id="translation-model-title">이미지 번역 모델</h2>
+        <section aria-labelledby="slideshow-title">
+          <h2 id="slideshow-title">슬라이드쇼</h2>
+          <p>
+            슬라이드쇼를 사용하면 이미지 뷰어 툴바에 시작·정지 버튼을
+            표시합니다.
+          </p>
+          <div class="options-dialog__feature-settings">
+            <label>
+              <input
+                type="checkbox"
+                :checked="slideshowPreference.enabled"
+                @change="setSlideshowEnabled"
+              />
+              <span>슬라이드쇼 기능 사용</span>
+            </label>
+            <label class="options-dialog__select-setting">
+              <span>이미지 전환 간격</span>
+              <select
+                :value="slideshowPreference.intervalSeconds"
+                :disabled="!slideshowPreference.enabled"
+                @change="setSlideshowInterval"
+              >
+                <option
+                  v-for="seconds in VIEWER_SLIDESHOW_INTERVAL_OPTIONS"
+                  :key="seconds"
+                  :value="seconds"
+                >
+                  {{ seconds }}초
+                </option>
+              </select>
+            </label>
+            <label>
+              <input
+                type="checkbox"
+                :checked="slideshowPreference.loop"
+                :disabled="!slideshowPreference.enabled"
+                @change="setSlideshowLoop"
+              />
+              <span>마지막 이미지 다음에 처음부터 반복</span>
+            </label>
+          </div>
+        </section>
+
+        <section aria-labelledby="translation-title">
+          <h2 id="translation-title">이미지 번역</h2>
+          <p>
+            기능을 사용하면 이미지 뷰어의 번역 버튼과 메인 툴바의 일괄
+            번역 버튼을 표시합니다.
+          </p>
+          <div class="options-dialog__feature-settings">
+            <label>
+              <input
+                type="checkbox"
+                :checked="translationEnabled"
+                @change="setTranslationEnabled"
+              />
+              <span>이미지 번역 기능 사용</span>
+            </label>
+          </div>
+          <h3>번역 모델 데이터</h3>
           <p>
             최초 번역 시 내려받은 영역 감지·OCR 모델을 이 브라우저에 보관합니다.
             전체 크기는 약
@@ -238,6 +345,11 @@ onMounted(() => {
       font-size: inherit;
     }
 
+    h3 {
+      margin: 14px 0 8px;
+      font-size: inherit;
+    }
+
     p {
       margin: 0 0 12px;
     }
@@ -270,6 +382,28 @@ onMounted(() => {
       display: flex;
       gap: 7px;
       align-items: center;
+    }
+  }
+
+  &__feature-settings {
+    display: grid;
+    gap: 10px;
+    padding: 9px;
+    background: var(--color-face);
+    border: 1px solid var(--color-shadow);
+
+    label {
+      display: flex;
+      gap: 7px;
+      align-items: center;
+    }
+  }
+
+  &__select-setting {
+    justify-content: space-between;
+
+    select {
+      min-width: 86px;
     }
   }
 

@@ -5,6 +5,14 @@ export interface ViewerZoomPreference {
   scale: number
 }
 
+export interface ViewerSlideshowPreference {
+  enabled: boolean
+  intervalSeconds: number
+  loop: boolean
+}
+
+export const VIEWER_SLIDESHOW_INTERVAL_OPTIONS = [3, 5, 10] as const
+
 type ReadableStorage = Pick<Storage, 'getItem'>
 type WritableStorage = Pick<Storage, 'setItem'>
 
@@ -12,8 +20,15 @@ const ZOOM_MODE_STORAGE_KEY = 'websee-viewer-zoom-mode'
 const ZOOM_SCALE_STORAGE_KEY = 'websee-viewer-zoom-scale'
 const ENHANCEMENT_STORAGE_KEY = 'websee-viewer-image-enhancement'
 const TRANSLATION_OVERLAY_STORAGE_KEY = 'websee-viewer-translation-overlay-visible'
+const TRANSLATION_ENABLED_STORAGE_KEY = 'websee-translation-enabled'
+const SLIDESHOW_STORAGE_KEY = 'websee-viewer-slideshow'
 const MIN_ZOOM_SCALE = 0.03
 const MAX_ZOOM_SCALE = 16
+const DEFAULT_SLIDESHOW_PREFERENCE: ViewerSlideshowPreference = {
+  enabled: false,
+  intervalSeconds: 3,
+  loop: false,
+}
 
 function isViewerZoomMode(value: string | null): value is ViewerZoomMode {
   return value === 'fit' || value === 'width' || value === 'actual' || value === 'custom'
@@ -64,4 +79,49 @@ export function writeViewerTranslationOverlayPreference(
   visible: boolean,
 ): void {
   storage.setItem(TRANSLATION_OVERLAY_STORAGE_KEY, String(visible))
+}
+
+export function readTranslationEnabledPreference(storage: ReadableStorage): boolean {
+  return storage.getItem(TRANSLATION_ENABLED_STORAGE_KEY) === 'true'
+}
+
+export function writeTranslationEnabledPreference(
+  storage: WritableStorage,
+  enabled: boolean,
+): void {
+  storage.setItem(TRANSLATION_ENABLED_STORAGE_KEY, String(enabled))
+}
+
+export function readViewerSlideshowPreference(
+  storage: ReadableStorage,
+): ViewerSlideshowPreference {
+  const storedValue = storage.getItem(SLIDESHOW_STORAGE_KEY)
+  if (!storedValue) return { ...DEFAULT_SLIDESHOW_PREFERENCE }
+
+  try {
+    const parsed: unknown = JSON.parse(storedValue)
+    if (typeof parsed !== 'object' || parsed === null) {
+      return { ...DEFAULT_SLIDESHOW_PREFERENCE }
+    }
+
+    const preference = parsed as Partial<ViewerSlideshowPreference>
+    const intervalSeconds = VIEWER_SLIDESHOW_INTERVAL_OPTIONS.find(
+      (option) => option === preference.intervalSeconds,
+    )
+
+    return {
+      enabled: preference.enabled === true,
+      intervalSeconds: intervalSeconds ?? DEFAULT_SLIDESHOW_PREFERENCE.intervalSeconds,
+      loop: preference.loop === true,
+    }
+  } catch {
+    return { ...DEFAULT_SLIDESHOW_PREFERENCE }
+  }
+}
+
+export function writeViewerSlideshowPreference(
+  storage: WritableStorage,
+  preference: ViewerSlideshowPreference,
+): void {
+  storage.setItem(SLIDESHOW_STORAGE_KEY, JSON.stringify(preference))
 }

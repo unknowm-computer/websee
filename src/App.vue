@@ -56,6 +56,13 @@ import {
   naturalCompare,
   sortMediaItems,
 } from '@/utils/media'
+import {
+  readTranslationEnabledPreference,
+  readViewerSlideshowPreference,
+  writeTranslationEnabledPreference,
+  writeViewerSlideshowPreference,
+  type ViewerSlideshowPreference,
+} from '@/utils/viewerPreferences'
 
 const FILE_LIST_COLUMNS_STORAGE_KEY = 'websee-file-list-columns'
 const DEFAULT_FILE_LIST_COLUMNS = {
@@ -72,6 +79,10 @@ const viewMode = ref<MediaViewMode>(readViewMode())
 const sortKey = ref<MediaSortKey>(readSortKey())
 const sortAscending = ref(readBooleanPreference('websee-sort-ascending', true))
 const fileListColumns = reactive<MediaListColumnVisibility>(readFileListColumns())
+const viewerSlideshowPreference = reactive<ViewerSlideshowPreference>(
+  readViewerSlideshowPreference(localStorage),
+)
+const translationEnabled = ref(readTranslationEnabledPreference(localStorage))
 const viewerOpen = ref(false)
 const textViewerItem = ref<MediaItem>()
 const viewerItems = ref<MediaItem[]>([])
@@ -316,8 +327,11 @@ const batchFolderLabel = computed(() =>
   selectedDirectoryNode.value?.name ?? collection.value?.name ?? '현재 폴더',
 )
 const canBatchTranslate = computed(() =>
-  batchTranslationActive.value
-  || Boolean(directoryHandleCache.get(selectedDirectory.value)),
+  translationEnabled.value
+  && (
+    batchTranslationActive.value
+    || Boolean(directoryHandleCache.get(selectedDirectory.value))
+  ),
 )
 
 function readViewMode(): MediaViewMode {
@@ -1325,6 +1339,7 @@ function createCurrentBatchTranslationRun(options: BatchTranslationOptions) {
 }
 
 function handleStartBatchTranslation(options: BatchTranslationOptions): void {
+  if (!translationEnabled.value) return
   const run = createCurrentBatchTranslationRun(options)
   if (!run) {
     showError('현재 폴더에서 일괄 번역할 이미지나 압축파일을 찾지 못했습니다.')
@@ -1343,6 +1358,19 @@ function setSortKey(key: MediaSortKey): void {
 
 function setFileListColumn(column: MediaListColumnKey, visible: boolean): void {
   fileListColumns[column] = visible
+}
+
+function updateViewerSlideshowPreference(
+  preference: ViewerSlideshowPreference,
+): void {
+  Object.assign(viewerSlideshowPreference, preference)
+}
+
+function updateTranslationEnabled(enabled: boolean): void {
+  translationEnabled.value = enabled
+  if (enabled) return
+  batchTranslationDialogOpen.value = false
+  stopBatchTranslation()
 }
 
 function moveSelection(delta: number): void {
@@ -1439,6 +1467,14 @@ watch(
   (value) => localStorage.setItem(FILE_LIST_COLUMNS_STORAGE_KEY, JSON.stringify(value)),
   { deep: true },
 )
+watch(
+  viewerSlideshowPreference,
+  (value) => writeViewerSlideshowPreference(localStorage, value),
+  { deep: true },
+)
+watch(translationEnabled, (value) =>
+  writeTranslationEnabledPreference(localStorage, value),
+)
 
 onMounted(() => window.addEventListener('keydown', handleBrowserKeydown))
 onBeforeUnmount(() => {
@@ -1462,6 +1498,7 @@ onBeforeUnmount(() => {
       :has-media="Boolean(collection?.items.length)"
       :sort-ascending="sortAscending"
       :sort-key="sortKey"
+      :translation-enabled="translationEnabled"
       :view-mode="viewMode"
       @open-directory="openDirectory"
       @open-images="imageInput?.click()"
@@ -1642,10 +1679,12 @@ onBeforeUnmount(() => {
       :current-id="viewerCurrentId"
       :get-url="getUrl"
       :initial-slideshow="initialSlideshow"
+      :slideshow-preference="viewerSlideshowPreference"
       :load-saved-translation="loadSavedTranslation"
       :prepare-translation-persistence="prepareTranslationPersistence"
       :save-translation="saveTranslation"
       :translation-disabled="batchTranslationActive"
+      :translation-enabled="translationEnabled"
       @close="closeViewer"
       @select="selectViewerItem"
       @dimensions="updateDimensions"
@@ -1661,8 +1700,12 @@ onBeforeUnmount(() => {
     <OptionsDialog
       v-if="optionsOpen"
       :file-list-columns="fileListColumns"
+      :slideshow-preference="viewerSlideshowPreference"
+      :translation-enabled="translationEnabled"
       @close="optionsOpen = false"
       @set-file-list-column="setFileListColumn"
+      @update-slideshow-preference="updateViewerSlideshowPreference"
+      @update-translation-enabled="updateTranslationEnabled"
     />
     <BatchTranslationDialog
       v-if="batchTranslationDialogOpen"
