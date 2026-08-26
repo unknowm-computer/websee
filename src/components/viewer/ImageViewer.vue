@@ -13,12 +13,20 @@ import ImageTranslationOverlay from "@/components/viewer/ImageTranslationOverlay
 import ImageTranslationStatus from "@/components/viewer/ImageTranslationStatus.vue";
 import ImageTranslationToast from "@/components/viewer/ImageTranslationToast.vue";
 import { useImageTranslation } from "@/composables/useImageTranslation";
+import {
+  createImageEnhancementRenderer,
+  type ImageEnhancementRenderer,
+} from "@/services/imageEnhancement";
 import type { ImageTranslationResult } from "@/types/imageTranslation";
 import type { MediaItem } from "@/types/media";
 import { formatBytes } from "@/utils/media";
 import { calculateAnchoredPan } from "@/utils/viewerGeometry";
 import {
+  readViewerEnhancementPreference,
+  readViewerTranslationOverlayPreference,
   readViewerZoomPreference,
+  writeViewerEnhancementPreference,
+  writeViewerTranslationOverlayPreference,
   writeViewerZoomPreference,
   type ViewerZoomMode,
 } from "@/utils/viewerPreferences";
@@ -55,6 +63,8 @@ const emit = defineEmits<{
 
 const root = ref<HTMLElement>();
 const stage = ref<HTMLElement>();
+const imageElement = ref<HTMLImageElement>();
+const enhancementCanvas = ref<HTMLCanvasElement>();
 const stageWidth = ref(0);
 const stageHeight = ref(0);
 const naturalWidth = ref(0);
@@ -65,6 +75,10 @@ const rotation = ref(0);
 const panX = ref(0);
 const panY = ref(0);
 const zoomMode = ref<ViewerZoomMode>(initialZoomPreference.mode);
+const imageEnhancementEnabled = ref(
+  readViewerEnhancementPreference(localStorage),
+);
+const imageEnhancementMode = ref<"original" | "webgl" | "css">("original");
 const imageFailed = ref(false);
 const initialImageReady = ref(false);
 const slideshowActive = ref(props.initialSlideshow);
@@ -84,7 +98,10 @@ const {
   toggle: toggleImageTranslation,
   toggleOverlay: toggleTranslationOverlay,
 } = useImageTranslation({
+  initialOverlayVisible: readViewerTranslationOverlayPreference(localStorage),
   loadSavedResult: props.loadSavedTranslation,
+  onOverlayVisibilityChange: (visible) =>
+    writeViewerTranslationOverlayPreference(localStorage, visible),
   prepareResultPersistence: props.prepareTranslationPersistence,
   saveResult: props.saveTranslation,
 });
@@ -94,6 +111,8 @@ let dragStartX = 0;
 let dragStartY = 0;
 let dragOriginX = 0;
 let dragOriginY = 0;
+let imageEnhancementRenderer: ImageEnhancementRenderer | undefined;
+let imageEnhancementRequest = 0;
 
 const currentIndex = computed(() =>
   Math.max(
@@ -150,6 +169,9 @@ const translationButtonLabel = computed(() => {
   if (!hasTranslationResult.value) return "번역";
   return "다시 번역";
 });
+const imageEnhancementButtonLabel = computed(() =>
+  imageEnhancementEnabled.value ? "화질 개선 끄기" : "화질 개선 켜기",
+);
 
 function clampScale(value: number): number {
   return Math.min(16, Math.max(0.03, value));
@@ -285,6 +307,96 @@ function handleFullscreenChange(): void {
   isFullscreen.value = document.fullscreenElement === root.value;
 }
 
+function disposeImageEnhancementRenderer(): void {
+  imageEnhancementRenderer?.dispose();
+  imageEnhancementRenderer = undefined;
+}
+
+function waitForAnimationFrame(): Promise<void> {
+  return new Promise((resolve) => window.requestAnimationFrame(() => resolve()));
+}
+
+async function renderImageEnhancement(
+  image: HTMLImageElement,
+  itemId: string,
+): Promise<void> {
+  const requestId = ++imageEnhancementRequest;
+  imageEnhancementMode.value = "original";
+  await nextTick();
+  await waitForAnimationFrame();
+
+  if (
+    requestId !== imageEnhancementRequest ||
+    !imageEnhancementEnabled.value ||
+    currentItem.value?.id !== itemId ||
+    imageElement.value !== image
+  )
+    return;
+
+  const canvas = enhancementCanvas.value;
+  if (!canvas) return;
+
+  imageEnhancementRenderer ??= createImageEnhancementRenderer(canvas);
+  if (!imageEnhancementRenderer) {
+    imageEnhancementMode.value = "css";
+    return;
+  }
+
+  const result = imageEnhancementRenderer.render(image);
+  if (
+    requestId !== imageEnhancementRequest ||
+    !imageEnhancementEnabled.value ||
+    currentItem.value?.id !== itemId
+  )
+    return;
+
+  if (result === "rendered") {
+    imageEnhancementMode.value = "webgl";
+    return;
+  }
+
+  if (result === "failed") {
+    disposeImageEnhancementRenderer();
+  }
+  imageEnhancementMode.value = "css";
+}
+
+function toggleImageEnhancement(): void {
+  imageEnhancementEnabled.value = !imageEnhancementEnabled.value;
+  writeViewerEnhancementPreference(
+    localStorage,
+    imageEnhancementEnabled.value,
+  );
+  imageEnhancementRequest += 1;
+
+  if (!imageEnhancementEnabled.value) {
+    disposeImageEnhancementRenderer();
+    imageEnhancementMode.value = "original";
+    return;
+  }
+
+  const image = imageElement.value;
+  const item = currentItem.value;
+  if (image?.complete && image.naturalWidth && item) {
+    void renderImageEnhancement(image, item.id);
+  }
+}
+
+function handleEnhancementContextLost(): void {
+  imageEnhancementRequest += 1;
+  imageEnhancementRenderer = undefined;
+  imageEnhancementMode.value = imageEnhancementEnabled.value ? "css" : "original";
+}
+
+function handleEnhancementContextRestored(): void {
+  imageEnhancementRenderer = undefined;
+  const image = imageElement.value;
+  const item = currentItem.value;
+  if (imageEnhancementEnabled.value && image?.complete && image.naturalWidth && item) {
+    void renderImageEnhancement(image, item.id);
+  }
+}
+
 function handleImageLoad(event: Event): void {
   const image = event.currentTarget;
   if (!(image instanceof HTMLImageElement) || !currentItem.value) return;
@@ -299,7 +411,16 @@ function handleImageLoad(event: Event): void {
     image.naturalHeight,
   );
   applyZoomMode(true);
+  if (imageEnhancementEnabled.value) {
+    void renderImageEnhancement(image, loadedItemId);
+  }
   if (!initialImageReady.value) void revealInitialImage(loadedItemId);
+}
+
+function handleImageError(): void {
+  imageEnhancementRequest += 1;
+  imageEnhancementMode.value = "original";
+  imageFailed.value = true;
 }
 
 async function revealInitialImage(itemId: string): Promise<void> {
@@ -419,6 +540,9 @@ watch(slideshowActive, syncSlideshowTimer);
 watch(
   () => props.currentId,
   async () => {
+    imageEnhancementRequest += 1;
+    disposeImageEnhancementRenderer();
+    imageEnhancementMode.value = "original";
     selectTranslationItem(currentItem.value);
     naturalWidth.value = currentItem.value?.width ?? 0;
     naturalHeight.value = currentItem.value?.height ?? 0;
@@ -445,6 +569,8 @@ onMounted(() => {
 
 onBeforeUnmount(() => {
   stopSlideshowTimer();
+  imageEnhancementRequest += 1;
+  disposeImageEnhancementRenderer();
   resizeObserver?.disconnect();
   window.removeEventListener("keydown", handleKeydown, { capture: true });
   document.removeEventListener("fullscreenchange", handleFullscreenChange);
@@ -540,6 +666,21 @@ onBeforeUnmount(() => {
       </button>
       <button
         type="button"
+        :title="imageEnhancementButtonLabel"
+        :aria-label="imageEnhancementButtonLabel"
+        :aria-pressed="imageEnhancementEnabled"
+        :class="{ 'is-pressed': imageEnhancementEnabled }"
+        :disabled="!currentItem || imageFailed"
+        @click="toggleImageEnhancement"
+      >
+        <SvgIcon
+          :name="imageEnhancementEnabled ? 'blur-on' : 'blur-off'"
+          :size="20"
+        />
+        <span class="image-viewer__button-label">화질 개선</span>
+      </button>
+      <button
+        type="button"
         :aria-label="translationButtonLabel"
         :title="
           translationDisabled
@@ -618,12 +759,25 @@ onBeforeUnmount(() => {
         :style="imageLayerStyle"
       >
         <img
+          ref="imageElement"
           :key="currentItem.id"
           :src="getUrl(currentItem)"
           :alt="currentItem.name"
+          :class="{
+            'is-webgl-source': imageEnhancementMode === 'webgl',
+            'is-css-enhanced': imageEnhancementEnabled && imageEnhancementMode === 'css',
+          }"
           draggable="false"
           @load="handleImageLoad"
-          @error="imageFailed = true"
+          @error="handleImageError"
+        />
+        <canvas
+          ref="enhancementCanvas"
+          class="image-viewer__enhancement-canvas"
+          :class="{ 'is-visible': imageEnhancementMode === 'webgl' }"
+          aria-hidden="true"
+          @webglcontextlost.prevent="handleEnhancementContextLost"
+          @webglcontextrestored="handleEnhancementContextRestored"
         />
         <ImageTranslationOverlay
           v-if="
@@ -819,6 +973,28 @@ onBeforeUnmount(() => {
       max-width: none;
       max-height: none;
       box-shadow: 0 4px 28px rgb(0 0 0 / 55%);
+
+      &.is-webgl-source {
+        visibility: hidden;
+      }
+
+      &.is-css-enhanced {
+        filter: brightness(1.01) contrast(1.08) saturate(1.02);
+      }
+    }
+  }
+
+  &__enhancement-canvas {
+    position: absolute;
+    inset: 0;
+    display: none;
+    width: 100%;
+    height: 100%;
+    pointer-events: none;
+    box-shadow: 0 4px 28px rgb(0 0 0 / 55%);
+
+    &.is-visible {
+      display: block;
     }
   }
 

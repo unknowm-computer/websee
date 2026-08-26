@@ -121,8 +121,10 @@ function toggleExpanded(): void {
   &__row {
     display: flex;
     align-items: center;
+    width: 100%;
     min-width: max-content;
     height: 25px;
+    box-sizing: border-box;
   }
 
   &__toggle,
@@ -144,13 +146,13 @@ function toggleExpanded(): void {
 
   &__name {
     display: grid;
+    flex: 1 0 auto;
     grid-template-columns: 18px minmax(24px, 1fr);
     gap: 3px;
     align-items: center;
-    max-width: 205px;
+    min-width: max-content;
     height: 22px;
     padding: 1px 5px 1px 2px;
-    overflow: hidden;
     font: inherit;
     color: var(--color-window-text);
     text-align: left;
@@ -159,8 +161,7 @@ function toggleExpanded(): void {
     border: 1px solid transparent;
 
     span:nth-child(2) {
-      overflow: hidden;
-      text-overflow: ellipsis;
+      white-space: nowrap;
     }
 
     &:hover {

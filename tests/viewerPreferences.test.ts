@@ -1,7 +1,11 @@
 import { describe, expect, it } from 'vitest'
 
 import {
+  readViewerEnhancementPreference,
+  readViewerTranslationOverlayPreference,
   readViewerZoomPreference,
+  writeViewerEnhancementPreference,
+  writeViewerTranslationOverlayPreference,
   writeViewerZoomPreference,
 } from '@/utils/viewerPreferences'
 
@@ -42,5 +46,40 @@ describe('viewer zoom preferences', () => {
     writeViewerZoomPreference(storage, { mode: 'custom', scale: 1.75 })
 
     expect(readViewerZoomPreference(storage)).toEqual({ mode: 'custom', scale: 1.75 })
+  })
+})
+
+describe('viewer image enhancement preference', () => {
+  it('is disabled by default and ignores invalid values', () => {
+    expect(readViewerEnhancementPreference(createStorage())).toBe(false)
+    expect(readViewerEnhancementPreference(createStorage({
+      'websee-viewer-image-enhancement': 'yes',
+    }))).toBe(false)
+  })
+
+  it('stores and restores the enabled state', () => {
+    const storage = createStorage()
+
+    writeViewerEnhancementPreference(storage, true)
+    expect(readViewerEnhancementPreference(storage)).toBe(true)
+
+    writeViewerEnhancementPreference(storage, false)
+    expect(readViewerEnhancementPreference(storage)).toBe(false)
+  })
+})
+
+describe('viewer translation overlay preference', () => {
+  it('is visible by default', () => {
+    expect(readViewerTranslationOverlayPreference(createStorage())).toBe(true)
+  })
+
+  it('stores and restores the last visibility state', () => {
+    const storage = createStorage()
+
+    writeViewerTranslationOverlayPreference(storage, false)
+    expect(readViewerTranslationOverlayPreference(storage)).toBe(false)
+
+    writeViewerTranslationOverlayPreference(storage, true)
+    expect(readViewerTranslationOverlayPreference(storage)).toBe(true)
   })
 })

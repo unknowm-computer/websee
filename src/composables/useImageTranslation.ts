@@ -36,7 +36,9 @@ interface PendingTranslation {
 }
 
 interface UseImageTranslationOptions {
+  initialOverlayVisible?: boolean
   loadSavedResult?: (item: MediaItem) => Promise<ImageTranslationResult | undefined>
+  onOverlayVisibilityChange?: (visible: boolean) => void
   prepareResultPersistence?: (item: MediaItem) => Promise<boolean>
   saveResult?: (item: MediaItem, result: ImageTranslationResult) => Promise<void>
 }
@@ -66,6 +68,7 @@ export function useImageTranslation(options: UseImageTranslationOptions = {}) {
   let languageDetectorPromise: Promise<LanguageDetectorInstance | undefined> | undefined
   let pendingTranslation: PendingTranslation | undefined
   let noticeTimer: number | undefined
+  let overlayPreferredVisible = options.initialOverlayVisible ?? true
 
   const processing = computed(() =>
     progress.value.phase === 'preparing'
@@ -73,6 +76,13 @@ export function useImageTranslation(options: UseImageTranslationOptions = {}) {
     || progress.value.phase === 'recognizing'
     || progress.value.phase === 'translating',
   )
+
+  function syncOverlayVisibility(
+    translationResult: ImageTranslationResult | undefined = result.value,
+  ): void {
+    overlayVisible.value = overlayPreferredVisible
+      && Boolean(translationResult?.regions.length)
+  }
 
   function clearWorkerIdleTimer(): void {
     if (workerIdleTimer !== undefined) window.clearTimeout(workerIdleTimer)
@@ -184,7 +194,7 @@ export function useImageTranslation(options: UseImageTranslationOptions = {}) {
       }
       cacheResult(nextResult)
       result.value = nextResult
-      overlayVisible.value = regions.length > 0
+      syncOverlayVisibility(nextResult)
       statusVisible.value = false
       progress.value = {
         phase: 'complete',
@@ -330,7 +340,7 @@ export function useImageTranslation(options: UseImageTranslationOptions = {}) {
       statusVisible.value = false
       const cached = currentItemId ? resultCache.get(currentItemId) : undefined
       result.value = cached
-      overlayVisible.value = Boolean(cached?.regions.length)
+      syncOverlayVisibility(cached)
       progress.value = cached
         ? { phase: 'complete', message: `${cached.regions.length}개 영역의 번역 결과` }
         : { phase: 'idle', message: '' }
@@ -346,7 +356,7 @@ export function useImageTranslation(options: UseImageTranslationOptions = {}) {
     statusVisible.value = false
     const cached = currentItemId ? resultCache.get(currentItemId) : undefined
     result.value = cached
-    overlayVisible.value = Boolean(cached?.regions.length)
+    syncOverlayVisibility(cached)
     progress.value = cached
       ? { phase: 'complete', message: `${cached.regions.length}개 영역의 번역 결과` }
       : { phase: 'idle', message: '' }
@@ -359,7 +369,7 @@ export function useImageTranslation(options: UseImageTranslationOptions = {}) {
       if (!savedResult || sequence !== restoreSequence || currentItemId !== item.id) return
       cacheResult(savedResult)
       result.value = savedResult
-      overlayVisible.value = savedResult.regions.length > 0
+      syncOverlayVisibility(savedResult)
       statusVisible.value = false
       progress.value = {
         phase: 'complete',
@@ -381,7 +391,7 @@ export function useImageTranslation(options: UseImageTranslationOptions = {}) {
     dismissNotice()
     const cached = itemId ? resultCache.get(itemId) : undefined
     result.value = cached
-    overlayVisible.value = Boolean(cached?.regions.length)
+    syncOverlayVisibility(cached)
     statusVisible.value = false
     progress.value = cached
       ? { phase: 'complete', message: `${cached.regions.length}개 영역의 번역 결과` }
@@ -471,7 +481,10 @@ export function useImageTranslation(options: UseImageTranslationOptions = {}) {
   }
 
   function toggleOverlay(): void {
-    if (result.value?.regions.length) overlayVisible.value = !overlayVisible.value
+    if (!result.value?.regions.length) return
+    overlayPreferredVisible = !overlayPreferredVisible
+    syncOverlayVisibility()
+    options.onOverlayVisibilityChange?.(overlayPreferredVisible)
   }
 
   function dismissStatus(): void {

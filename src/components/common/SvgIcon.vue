@@ -7,6 +7,8 @@ import arrowLeftUrl from "@/images/icons/arrow_left.svg";
 import arrowRightUrl from "@/images/icons/arrow_right.svg";
 import arrowUpUrl from "@/images/icons/arrow_up.svg";
 import autoUrl from "@/images/icons/auto.svg";
+import blurOffUrl from "@/images/icons/blur_off.svg";
+import blurOnUrl from "@/images/icons/blur_on.svg";
 import closeUrl from "@/images/icons/close.svg";
 import docsUrl from "@/images/icons/docs.svg";
 import downloadForOfflineUrl from "@/images/icons/download_for_offline.svg";
@@ -37,6 +39,8 @@ const iconUrls = {
   "arrow-right": arrowRightUrl,
   "arrow-up": arrowUpUrl,
   auto: autoUrl,
+  "blur-off": blurOffUrl,
+  "blur-on": blurOnUrl,
   close: closeUrl,
   docs: docsUrl,
   "download-for-offline": downloadForOfflineUrl,
