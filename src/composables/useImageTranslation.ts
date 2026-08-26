@@ -36,6 +36,7 @@ interface PendingTranslation {
 }
 
 interface UseImageTranslationOptions {
+  deleteSavedResult?: (item: MediaItem) => Promise<boolean>
   initialOverlayVisible?: boolean
   loadSavedResult?: (item: MediaItem) => Promise<ImageTranslationResult | undefined>
   onOverlayVisibilityChange?: (visible: boolean) => void
@@ -141,6 +142,12 @@ export function useImageTranslation(options: UseImageTranslationOptions = {}) {
       const oldestId = resultCacheOrder.shift()
       if (oldestId) resultCache.delete(oldestId)
     }
+  }
+
+  function removeCachedResult(itemId: string): void {
+    resultCache.delete(itemId)
+    const index = resultCacheOrder.indexOf(itemId)
+    if (index >= 0) resultCacheOrder.splice(index, 1)
   }
 
   function finishRequest(): void {
@@ -487,6 +494,32 @@ export function useImageTranslation(options: UseImageTranslationOptions = {}) {
     options.onOverlayVisibilityChange?.(overlayPreferredVisible)
   }
 
+  async function deleteResult(item: MediaItem): Promise<void> {
+    cancel()
+    dismissNotice()
+    currentItemId = item.id
+
+    try {
+      const deletedSavedResult = await options.deleteSavedResult?.(item) ?? false
+      removeCachedResult(item.id)
+      if (currentItemId !== item.id) return
+
+      result.value = undefined
+      overlayVisible.value = false
+      statusVisible.value = false
+      progress.value = { phase: 'idle', message: '' }
+      showNotice(
+        deletedSavedResult
+          ? '현재 이미지의 저장된 번역 결과를 삭제했습니다.'
+          : '현재 이미지의 번역 결과를 삭제했습니다.',
+      )
+    } catch {
+      if (currentItemId === item.id) {
+        showNotice('현재 이미지의 저장된 번역 결과를 삭제하지 못했습니다.')
+      }
+    }
+  }
+
   function dismissStatus(): void {
     statusVisible.value = false
   }
@@ -503,6 +536,7 @@ export function useImageTranslation(options: UseImageTranslationOptions = {}) {
 
   return {
     continueTranslation,
+    deleteResult,
     dismissNotice,
     dismissStatus,
     notice,

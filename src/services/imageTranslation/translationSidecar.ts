@@ -214,6 +214,15 @@ async function writeDocument(
   await writable.close()
 }
 
+async function removeDocument(target: TranslationSidecarTarget): Promise<void> {
+  const storageDirectory = await target.directoryHandle.getDirectoryHandle(
+    TRANSLATION_SIDECAR_DIRECTORY_NAME,
+  )
+  await storageDirectory.removeEntry(getSidecarFileName(target))
+  for await (const _entry of storageDirectory.entries()) return
+  await target.directoryHandle.removeEntry(TRANSLATION_SIDECAR_DIRECTORY_NAME)
+}
+
 function enqueueWrite(
   target: TranslationSidecarTarget,
   operation: () => Promise<void>,
@@ -313,4 +322,32 @@ export function saveTranslationSidecar(
       entries,
     })
   })
+}
+
+export async function deleteTranslationSidecar(
+  target: TranslationSidecarTarget,
+): Promise<boolean> {
+  let deleted = false
+  await enqueueWrite(target, async () => {
+    const document = await readDocument(target)
+    if (!document || !sourceMatches(document.source, target.sourceItem)) return
+
+    if (!target.archiveEntryPath) {
+      if (document.kind !== 'image') return
+      await removeDocument(target)
+      deleted = true
+      return
+    }
+
+    if (document.kind !== 'archive' || !document.entries[target.archiveEntryPath]) return
+    const entries = { ...document.entries }
+    delete entries[target.archiveEntryPath]
+    if (Object.keys(entries).length) {
+      await writeDocument(target, { ...document, entries })
+    } else {
+      await removeDocument(target)
+    }
+    deleted = true
+  })
+  return deleted
 }

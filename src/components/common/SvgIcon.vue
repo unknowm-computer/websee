@@ -10,6 +10,7 @@ import autoUrl from "@/images/icons/auto.svg";
 import blurOffUrl from "@/images/icons/blur_off.svg";
 import blurOnUrl from "@/images/icons/blur_on.svg";
 import closeUrl from "@/images/icons/close.svg";
+import deleteUrl from "@/images/icons/delete.svg";
 import docsUrl from "@/images/icons/docs.svg";
 import downloadForOfflineUrl from "@/images/icons/download_for_offline.svg";
 import fileUrl from "@/images/icons/file.svg";
@@ -33,7 +34,7 @@ import zoomInUrl from "@/images/icons/zoom_in.svg";
 import zoomOutUrl from "@/images/icons/zoom_out.svg";
 
 const iconUrls = {
-  add: addUrl,
+  plus: addUrl,
   "arrow-down": arrowDownUrl,
   "arrow-left": arrowLeftUrl,
   "arrow-right": arrowRightUrl,
@@ -58,7 +59,8 @@ const iconUrls = {
   options: optionsUrl,
   play: playUrl,
   refresh: refreshUrl,
-  remove: removeUrl,
+  minus: removeUrl,
+  remove: deleteUrl,
   rotate: rotateUrl,
   "zoom-in": zoomInUrl,
   "zoom-out": zoomOutUrl,

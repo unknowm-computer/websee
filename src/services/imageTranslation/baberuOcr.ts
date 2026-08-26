@@ -67,7 +67,11 @@ class BaberuVocab {
   }
 }
 
-function createOcrInput(bitmap: ImageBitmap, bounds: ImageBounds): Float32Array {
+function createOcrInput(
+  bitmap: ImageBitmap,
+  bounds: ImageBounds,
+  preserveAspectRatio: boolean,
+): Float32Array {
   const canvas = new OffscreenCanvas(OCR_SIZE, OCR_SIZE)
   const context = canvas.getContext('2d', { willReadFrequently: true })
   if (!context) throw new Error('OCR 처리를 위한 Canvas를 만들 수 없습니다.')
@@ -76,16 +80,23 @@ function createOcrInput(bitmap: ImageBitmap, bounds: ImageBounds): Float32Array 
   context.fillRect(0, 0, OCR_SIZE, OCR_SIZE)
   context.imageSmoothingEnabled = true
   context.imageSmoothingQuality = 'high'
+  const scale = preserveAspectRatio
+    ? Math.min(OCR_SIZE / Math.max(1, bounds.width), OCR_SIZE / Math.max(1, bounds.height))
+    : 1
+  const targetWidth = preserveAspectRatio ? bounds.width * scale : OCR_SIZE
+  const targetHeight = preserveAspectRatio ? bounds.height * scale : OCR_SIZE
+  const targetX = (OCR_SIZE - targetWidth) / 2
+  const targetY = (OCR_SIZE - targetHeight) / 2
   context.drawImage(
     bitmap,
     bounds.x,
     bounds.y,
     bounds.width,
     bounds.height,
-    0,
-    0,
-    OCR_SIZE,
-    OCR_SIZE,
+    targetX,
+    targetY,
+    targetWidth,
+    targetHeight,
   )
 
   const pixels = context.getImageData(0, 0, OCR_SIZE, OCR_SIZE).data
@@ -176,11 +187,15 @@ export class BaberuOcr {
     }
   }
 
-  async recognize(bitmap: ImageBitmap, bounds: ImageBounds): Promise<string> {
+  async recognize(
+    bitmap: ImageBitmap,
+    bounds: ImageBounds,
+    preserveAspectRatio = false,
+  ): Promise<string> {
     const ort = getOnnxRuntime()
     const pixelTensor = new ort.Tensor(
       'float32',
-      createOcrInput(bitmap, bounds),
+      createOcrInput(bitmap, bounds, preserveAspectRatio),
       [1, 3, OCR_SIZE, OCR_SIZE],
     )
     let visionOutput: Record<string, import('onnxruntime-web').Tensor> | undefined

@@ -10,6 +10,7 @@ interface Props {
   imageHeight: number
   imageWidth: number
   regions: readonly ImageTranslationRegion[]
+  viewerScale: number
 }
 
 const props = defineProps<Props>()
@@ -23,11 +24,18 @@ function getRegionStyle(region: ImageTranslationRegion): CSSProperties {
   )
   const { x: left, y: top, width, height } = displayBounds
   const areaPerCharacter = width * height / Math.max(1, translatedText.length)
-  const fontSize = Math.max(
+  const calculatedFontSize = Math.max(
     10,
     Math.min(height * 0.34, width * 0.2, Math.sqrt(areaPerCharacter) * 0.78),
   )
-  const padding = Math.max(3, Math.min(width, height) * 0.06)
+  const safeViewerScale = Math.max(0.03, props.viewerScale)
+  const fontSize = region.kind === 'free-text'
+    ? Math.min(calculatedFontSize, 30 / safeViewerScale)
+    : calculatedFontSize
+  const calculatedPadding = Math.max(3, Math.min(width, height) * 0.06)
+  const padding = region.kind === 'free-text'
+    ? Math.min(calculatedPadding, 6 / safeViewerScale)
+    : calculatedPadding
 
   return {
     left: `${left}px`,

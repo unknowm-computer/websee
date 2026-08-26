@@ -29,6 +29,7 @@ import {
 import { createImageThumbnail } from '@/services/imageThumbnail'
 import { createBatchTranslationRun } from '@/services/imageTranslation/batchTranslationSources'
 import {
+  deleteTranslationSidecar,
   loadTranslationSidecar,
   requestTranslationSidecarPermission,
   saveTranslationSidecar,
@@ -1340,6 +1341,15 @@ async function saveTranslation(
   await saveTranslationSidecar(target, item, result)
 }
 
+async function deleteSavedTranslation(item: MediaItem): Promise<boolean> {
+  const target = getTranslationSidecarTarget(item)
+  if (!target) return false
+  if (!await requestTranslationSidecarPermission(target)) {
+    throw new Error('번역 결과를 삭제하려면 원본 폴더 쓰기 권한이 필요합니다.')
+  }
+  return await deleteTranslationSidecar(target)
+}
+
 function createCurrentBatchTranslationRun(options: BatchTranslationOptions) {
   const directoryHandle = directoryHandleCache.get(selectedDirectory.value)
   if (!directoryHandle) return undefined
@@ -1703,6 +1713,7 @@ onBeforeUnmount(() => {
       :get-url="getUrl"
       :initial-slideshow="initialSlideshow"
       :slideshow-preference="viewerSlideshowPreference"
+      :delete-saved-translation="deleteSavedTranslation"
       :load-saved-translation="loadSavedTranslation"
       :prepare-translation-persistence="prepareTranslationPersistence"
       :save-translation="saveTranslation"

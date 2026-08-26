@@ -119,7 +119,11 @@ async function recognizeRegions(
       total: candidates.length,
     })
     const candidate = candidates[index]
-    const sourceText = await recognizer.recognize(bitmap, candidate.cropBounds)
+    const sourceText = await recognizer.recognize(
+      bitmap,
+      candidate.cropBounds,
+      candidate.kind === 'free-text',
+    )
     assertActive(requestId)
     if (sourceText) {
       regions.push({

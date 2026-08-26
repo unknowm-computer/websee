@@ -6,6 +6,7 @@ import {
   onMounted,
   ref,
   watch,
+  type CSSProperties,
 } from "vue";
 
 import SvgIcon from "@/components/common/SvgIcon.vue";
@@ -34,6 +35,7 @@ import {
 
 interface Props {
   currentId: string;
+  deleteSavedTranslation?: (item: MediaItem) => Promise<boolean>;
   getUrl: (item: MediaItem) => string;
   initialSlideshow?: boolean;
   items: MediaItem[];
@@ -56,6 +58,8 @@ const props = withDefaults(defineProps<Props>(), {
 });
 
 const STAGE_PADDING = 16;
+const TRANSLATION_LONG_PRESS_MS = 500;
+const TRANSLATION_MENU_WIDTH = 238;
 const WHEEL_LINE_SIZE = 16;
 
 const emit = defineEmits<{
@@ -68,6 +72,12 @@ const root = ref<HTMLElement>();
 const stage = ref<HTMLElement>();
 const imageElement = ref<HTMLImageElement>();
 const enhancementCanvas = ref<HTMLCanvasElement>();
+const translationButton = ref<HTMLButtonElement>();
+const translationMenu = ref<HTMLElement>();
+const translationDeleteButton = ref<HTMLButtonElement>();
+const translationMenuOpen = ref(false);
+const translationDeleting = ref(false);
+const translationMenuStyle = ref<CSSProperties>({});
 const stageWidth = ref(0);
 const stageHeight = ref(0);
 const naturalWidth = ref(0);
@@ -91,6 +101,7 @@ const isFullscreen = ref(false);
 const dragPointerId = ref<number>();
 const {
   continueTranslation,
+  deleteResult: deleteTranslationResult,
   dismissNotice: dismissTranslationNotice,
   dismissStatus: dismissTranslationStatus,
   notice: translationNotice,
@@ -103,6 +114,7 @@ const {
   toggle: toggleImageTranslation,
   toggleOverlay: toggleTranslationOverlay,
 } = useImageTranslation({
+  deleteSavedResult: props.deleteSavedTranslation,
   initialOverlayVisible: readViewerTranslationOverlayPreference(localStorage),
   loadSavedResult: props.loadSavedTranslation,
   onOverlayVisibilityChange: (visible) =>
@@ -118,6 +130,8 @@ let dragOriginX = 0;
 let dragOriginY = 0;
 let imageEnhancementRenderer: ImageEnhancementRenderer | undefined;
 let imageEnhancementRequest = 0;
+let translationLongPressTimer: number | undefined;
+let suppressTranslationClick = false;
 
 const currentIndex = computed(() =>
   Math.max(
@@ -177,6 +191,99 @@ const translationButtonLabel = computed(() => {
 const imageEnhancementButtonLabel = computed(() =>
   imageEnhancementEnabled.value ? "화질 개선 끄기" : "화질 개선 켜기",
 );
+
+function clearTranslationLongPressTimer(): void {
+  if (translationLongPressTimer !== undefined) {
+    window.clearTimeout(translationLongPressTimer);
+  }
+  translationLongPressTimer = undefined;
+}
+
+function updateTranslationMenuPosition(): void {
+  const button = translationButton.value;
+  const viewer = root.value;
+  if (!button || !viewer) return;
+
+  const buttonBounds = button.getBoundingClientRect();
+  const viewerBounds = viewer.getBoundingClientRect();
+  const maximumLeft = Math.max(
+    6,
+    viewerBounds.width - TRANSLATION_MENU_WIDTH - 6,
+  );
+  translationMenuStyle.value = {
+    top: `${buttonBounds.bottom - viewerBounds.top + 3}px`,
+    left: `${Math.min(maximumLeft, Math.max(6, buttonBounds.left - viewerBounds.left))}px`,
+  };
+}
+
+async function openTranslationMenu(focusDeleteAction = false): Promise<void> {
+  if (!currentItem.value || imageFailed.value || props.translationDisabled)
+    return;
+  clearTranslationLongPressTimer();
+  translationMenuOpen.value = true;
+  await nextTick();
+  updateTranslationMenuPosition();
+  if (focusDeleteAction) translationDeleteButton.value?.focus();
+}
+
+function closeTranslationMenu(restoreFocus = false): void {
+  clearTranslationLongPressTimer();
+  translationMenuOpen.value = false;
+  if (restoreFocus) void nextTick(() => translationButton.value?.focus());
+}
+
+function startTranslationLongPress(event: PointerEvent): void {
+  if (event.button !== 0) return;
+  clearTranslationLongPressTimer();
+  suppressTranslationClick = false;
+  translationLongPressTimer = window.setTimeout(() => {
+    translationLongPressTimer = undefined;
+    suppressTranslationClick = true;
+    void openTranslationMenu(true);
+  }, TRANSLATION_LONG_PRESS_MS);
+}
+
+function finishTranslationLongPress(): void {
+  clearTranslationLongPressTimer();
+  if (suppressTranslationClick) {
+    window.setTimeout(() => {
+      suppressTranslationClick = false;
+    }, 0);
+  }
+}
+
+function handleTranslationButtonClick(): void {
+  if (suppressTranslationClick) {
+    suppressTranslationClick = false;
+    return;
+  }
+  closeTranslationMenu();
+  if (currentItem.value) toggleImageTranslation(currentItem.value);
+}
+
+function handleTranslationContextMenu(): void {
+  void openTranslationMenu(true);
+}
+
+async function deleteCurrentTranslation(): Promise<void> {
+  const item = currentItem.value;
+  if (!item || !hasTranslationResult.value || translationDeleting.value) return;
+
+  translationDeleting.value = true;
+  await deleteTranslationResult(item);
+  translationDeleting.value = false;
+  closeTranslationMenu(true);
+}
+
+function handleWindowPointerDown(event: PointerEvent): void {
+  if (!translationMenuOpen.value || !(event.target instanceof Node)) return;
+  if (
+    translationButton.value?.contains(event.target) ||
+    translationMenu.value?.contains(event.target)
+  )
+    return;
+  closeTranslationMenu();
+}
 
 function clampScale(value: number): number {
   return Math.min(16, Math.max(0.03, value));
@@ -499,21 +606,38 @@ function endDrag(event: PointerEvent): void {
 
 function handleKeydown(event: KeyboardEvent): void {
   const eventTarget = event.target;
-  if (
-    eventTarget instanceof Element &&
-    eventTarget.closest(".dialog-backdrop")
-  )
+  if (eventTarget instanceof Element && eventTarget.closest(".dialog-backdrop"))
+    return;
+
+  if (eventTarget === translationButton.value && event.key === "ArrowDown")
     return;
 
   if (event.key === "Escape") {
+    if (translationMenuOpen.value) {
+      event.preventDefault();
+      event.stopPropagation();
+      closeTranslationMenu(true);
+      return;
+    }
     if (!document.fullscreenElement) emit("close");
     return;
   }
 
-  const lowerKey = event.key.toLowerCase();
-  const canToggleImageEnhancement = Boolean(currentItem.value) && !imageFailed.value;
+  if (
+    eventTarget instanceof Element &&
+    eventTarget.closest(".image-viewer__translation-menu")
+  )
+    return;
+
+  const toggleEnhancementShortcut = event.code === "KeyE";
+  const toggleTranslationShortcut = event.code === "KeyT";
+  const rotateShortcut = event.code === "KeyR";
+  const fullscreenShortcut = event.code === "KeyF";
+  const canToggleImageEnhancement =
+    Boolean(currentItem.value) && !imageFailed.value;
   const canToggleTranslationOverlay =
-    props.translationEnabled && Boolean(translationResult.value?.regions.length);
+    props.translationEnabled &&
+    Boolean(translationResult.value?.regions.length);
   const handled =
     [
       "ArrowLeft",
@@ -528,9 +652,10 @@ function handleKeydown(event: KeyboardEvent): void {
       "1",
       "2",
     ].includes(event.key) ||
-    ["f", "r"].includes(lowerKey) ||
-    (lowerKey === "e" && canToggleImageEnhancement) ||
-    (lowerKey === "t" && canToggleTranslationOverlay);
+    rotateShortcut ||
+    fullscreenShortcut ||
+    (toggleEnhancementShortcut && canToggleImageEnhancement) ||
+    (toggleTranslationShortcut && canToggleTranslationOverlay);
   if (handled) event.preventDefault();
 
   if (event.key === "ArrowLeft" || event.key === "ArrowUp") moveBy(-1);
@@ -545,12 +670,12 @@ function handleKeydown(event: KeyboardEvent): void {
   if (event.key === "0") setZoomMode("fit");
   if (event.key === "1") setZoomMode("actual");
   if (event.key === "2") setZoomMode("width");
-  if (lowerKey === "e" && canToggleImageEnhancement)
+  if (toggleEnhancementShortcut && canToggleImageEnhancement)
     toggleImageEnhancement();
-  if (lowerKey === "t" && canToggleTranslationOverlay)
+  if (toggleTranslationShortcut && canToggleTranslationOverlay)
     toggleTranslationOverlay();
-  if (lowerKey === "r") rotateClockwise();
-  if (lowerKey === "f") void toggleFullscreen();
+  if (rotateShortcut) rotateClockwise();
+  if (fullscreenShortcut) void toggleFullscreen();
 }
 
 function stopSlideshowTimer(): void {
@@ -593,6 +718,7 @@ watch(
 watch(
   () => props.currentId,
   async () => {
+    closeTranslationMenu();
     imageEnhancementRequest += 1;
     disposeImageEnhancementRenderer();
     imageEnhancementMode.value = "original";
@@ -612,6 +738,9 @@ selectTranslationItem(currentItem.value);
 
 onMounted(() => {
   window.addEventListener("keydown", handleKeydown, { capture: true });
+  window.addEventListener("pointerdown", handleWindowPointerDown, {
+    capture: true,
+  });
   document.addEventListener("fullscreenchange", handleFullscreenChange);
   resizeObserver = new ResizeObserver(updateStageSize);
   if (stage.value) resizeObserver.observe(stage.value);
@@ -621,11 +750,15 @@ onMounted(() => {
 });
 
 onBeforeUnmount(() => {
+  clearTranslationLongPressTimer();
   stopSlideshowTimer();
   imageEnhancementRequest += 1;
   disposeImageEnhancementRenderer();
   resizeObserver?.disconnect();
   window.removeEventListener("keydown", handleKeydown, { capture: true });
+  window.removeEventListener("pointerdown", handleWindowPointerDown, {
+    capture: true,
+  });
   document.removeEventListener("fullscreenchange", handleFullscreenChange);
 });
 </script>
@@ -669,7 +802,7 @@ onBeforeUnmount(() => {
         aria-label="축소"
         @click="changeZoom(1 / 1.2)"
       >
-        <SvgIcon name="remove" :size="20" />
+        <SvgIcon name="minus" :size="20" />
       </button>
       <span class="image-viewer__zoom">{{ zoomPercent }}%</span>
       <button
@@ -678,7 +811,7 @@ onBeforeUnmount(() => {
         aria-label="확대"
         @click="changeZoom(1.2)"
       >
-        <SvgIcon name="add" :size="20" />
+        <SvgIcon name="plus" :size="20" />
       </button>
       <button
         type="button"
@@ -727,15 +860,24 @@ onBeforeUnmount(() => {
       </button>
       <button
         v-if="translationEnabled"
+        ref="translationButton"
         type="button"
         :aria-label="translationButtonLabel"
+        aria-haspopup="menu"
+        :aria-expanded="translationMenuOpen"
         :title="
           translationDisabled
             ? '폴더 일괄 번역이 진행 중입니다.'
-            : '현재 이미지의 일본어·중국어·영어를 한국어로 번역'
+            : '현재 이미지 번역 · 길게 눌러 번역 결과 관리'
         "
         :disabled="!currentItem || imageFailed || translationDisabled"
-        @click="currentItem && toggleImageTranslation(currentItem)"
+        @click="handleTranslationButtonClick"
+        @contextmenu.prevent="handleTranslationContextMenu"
+        @keydown.down.stop.prevent="openTranslationMenu(true)"
+        @pointercancel="finishTranslationLongPress"
+        @pointerdown="startTranslationLongPress"
+        @pointerleave="finishTranslationLongPress"
+        @pointerup="finishTranslationLongPress"
       >
         <SvgIcon name="translate" :size="20" />
         <span class="image-viewer__button-label">
@@ -798,6 +940,29 @@ onBeforeUnmount(() => {
     </header>
 
     <div
+      v-if="translationMenuOpen"
+      ref="translationMenu"
+      class="image-viewer__translation-menu"
+      :style="translationMenuStyle"
+      role="menu"
+      aria-label="현재 이미지 번역 관리"
+      @pointerdown.stop
+    >
+      <button
+        ref="translationDeleteButton"
+        type="button"
+        role="menuitem"
+        :disabled="!hasTranslationResult || translationDeleting"
+        @click="deleteCurrentTranslation"
+      >
+        <SvgIcon name="remove" :size="18" />
+        <span>
+          {{ translationDeleting ? "삭제 중..." : "현재 이미지 번역 삭제" }}
+        </span>
+      </button>
+    </div>
+
+    <div
       ref="stage"
       class="image-viewer__stage"
       :class="{
@@ -851,6 +1016,7 @@ onBeforeUnmount(() => {
           :image-width="translationResult.imageWidth"
           :image-height="translationResult.imageHeight"
           :regions="translationResult.regions"
+          :viewer-scale="scale"
         />
       </div>
       <div v-else class="image-viewer__error">
@@ -981,6 +1147,43 @@ onBeforeUnmount(() => {
 
   &__align-left {
     margin-left: auto;
+  }
+
+  &__translation-menu {
+    position: absolute;
+    z-index: 4;
+    width: max-content;
+    padding: 3px;
+    color: var(--color-window-text);
+    background: var(--color-face);
+    border: 1px solid;
+    border-color: var(--color-light) var(--color-shadow-dark)
+      var(--color-shadow-dark) var(--color-light);
+    box-shadow: 3px 4px 10px rgb(0 0 0 / 42%);
+
+    button {
+      display: flex;
+      gap: 7px;
+      align-items: center;
+      width: 100%;
+      min-height: 31px;
+      padding: 5px 8px;
+      font: inherit;
+      color: inherit;
+      text-align: left;
+      background: transparent;
+      border: 0;
+
+      &:hover:not(:disabled),
+      &:focus-visible:not(:disabled) {
+        background: var(--color-highlight);
+        outline: 0;
+      }
+
+      &:disabled {
+        color: var(--color-disabled);
+      }
+    }
   }
 
   &__separator {

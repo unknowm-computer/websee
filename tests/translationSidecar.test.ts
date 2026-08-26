@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from 'vitest'
 
 import {
+  deleteTranslationSidecar,
   loadTranslationSidecar,
   requestTranslationSidecarPermission,
   saveTranslationSidecar,
@@ -60,6 +61,23 @@ function createFakeDirectory(name = 'root'): FakeDirectory {
           } as FileSystemWritableFileStream
         },
       } as FileSystemFileHandle
+    },
+    async *entries() {
+      for (const [entryName, directory] of directories) {
+        yield [entryName, directory.handle] as const
+      }
+      for (const entryName of files.keys()) {
+        yield [entryName, { kind: 'file', name: entryName }] as const
+      }
+    },
+    async removeEntry(entryName: string, options?: FileSystemRemoveOptions) {
+      if (files.delete(entryName)) return
+      const directory = directories.get(entryName)
+      if (!directory) throw new DOMException('Not found', 'NotFoundError')
+      if (!options?.recursive && (directory.files.size || directory.directories.size)) {
+        throw new DOMException('Directory is not empty', 'InvalidModificationError')
+      }
+      directories.delete(entryName)
     },
   } as unknown as FileSystemDirectoryHandle
 
@@ -178,5 +196,42 @@ describe('translation sidecar', () => {
       sourceItem: item,
     })).resolves.toBe(true)
     expect(directory.requestPermission).toHaveBeenCalledWith({ mode: 'readwrite' })
+  })
+
+  it('deletes an image sidecar and removes the empty storage directory', async () => {
+    const directory = createFakeDirectory()
+    const item = createItem('001.jpg', 'image')
+    const target: TranslationSidecarTarget = {
+      directoryHandle: directory.handle,
+      sourceItem: item,
+    }
+    await saveTranslationSidecar(target, item, createResult(item.id, '저장 결과'))
+
+    await expect(deleteTranslationSidecar(target)).resolves.toBe(true)
+
+    expect(directory.directories.has('.websee')).toBe(false)
+    await expect(deleteTranslationSidecar(target)).resolves.toBe(false)
+  })
+
+  it('deletes only the selected archive entry translation', async () => {
+    const directory = createFakeDirectory()
+    const archive = createItem('book.cbz', 'archive', { size: 2048 })
+    const first = createItem('001.jpg', 'archive-entry', { path: '001.jpg', size: 512 })
+    const second = createItem('002.jpg', 'archive-entry', { path: '002.jpg', size: 768 })
+    const target = (item: MediaItem): TranslationSidecarTarget => ({
+      directoryHandle: directory.handle,
+      sourceItem: archive,
+      archiveEntryPath: item.path,
+    })
+    await saveTranslationSidecar(target(first), first, createResult(first.id, '첫 장'))
+    await saveTranslationSidecar(target(second), second, createResult(second.id, '둘째 장'))
+
+    await expect(deleteTranslationSidecar(target(first))).resolves.toBe(true)
+
+    await expect(loadTranslationSidecar(target(first), first)).resolves.toBeUndefined()
+    await expect(loadTranslationSidecar(target(second), second)).resolves.toMatchObject({
+      regions: [{ translatedText: '둘째 장' }],
+    })
+    expect(directory.directories.get('.websee')?.files.has('book.cbz.json')).toBe(true)
   })
 })

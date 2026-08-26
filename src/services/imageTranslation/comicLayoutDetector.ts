@@ -84,6 +84,27 @@ function removeDuplicates(detections: readonly RawDetection[]): RawDetection[] {
   return kept
 }
 
+export function removeOverlappingFreeTextCandidates(
+  candidates: readonly TextRegionCandidate[],
+): TextRegionCandidate[] {
+  const keptFreeText: TextRegionCandidate[] = []
+  const sortedFreeText = candidates
+    .filter((candidate) => candidate.kind === 'free-text')
+    .sort((left, right) => right.detectionScore - left.detectionScore)
+
+  for (const candidate of sortedFreeText) {
+    const duplicate = keptFreeText.some(
+      (kept) => intersectionOverUnion(kept.bounds, candidate.bounds) >= 0.65,
+    )
+    if (!duplicate) keptFreeText.push(candidate)
+  }
+
+  return [
+    ...candidates.filter((candidate) => candidate.kind === 'bubble'),
+    ...keptFreeText,
+  ]
+}
+
 function findContainingBubble(
   textBounds: ImageBounds,
   bubbles: readonly RawDetection[],
@@ -210,7 +231,7 @@ export class ComicLayoutDetector {
             id: `region-${candidates.length}`,
             kind,
             bounds: bubble?.bounds
-              ?? expandBounds(text.bounds, 0.18, bitmap.width, bitmap.height),
+              ?? text.bounds,
             cropBounds: expandBounds(
               bubble?.bounds ?? text.bounds,
               bubble ? 0.04 : 0.12,
@@ -220,7 +241,7 @@ export class ComicLayoutDetector {
             detectionScore: text.score,
           })
         }
-        return candidates.sort(sortReadingOrder)
+        return removeOverlappingFreeTextCandidates(candidates).sort(sortReadingOrder)
       } finally {
         for (const tensor of Object.values(output)) tensor.dispose()
       }
