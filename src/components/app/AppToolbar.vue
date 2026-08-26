@@ -60,25 +60,6 @@ const emit = defineEmits<{
     <span class="app-toolbar__separator" aria-hidden="true" />
 
     <button
-      v-if="translationEnabled"
-      type="button"
-      :class="{ 'is-pressed': batchActive }"
-      :aria-pressed="batchActive"
-      title="현재 폴더의 이미지와 압축파일을 일괄 번역"
-      :disabled="!canBatchTranslate"
-      @click="emit('show-batch-translation')"
-    >
-      <SvgIcon class="app-toolbar__icon" name="auto" />
-      <span>일괄 번역</span>
-    </button>
-
-    <span
-      v-if="translationEnabled"
-      class="app-toolbar__separator"
-      aria-hidden="true"
-    />
-
-    <button
       type="button"
       :class="{ 'is-pressed': viewMode === 'grid' }"
       :aria-pressed="viewMode === 'grid'"
@@ -129,6 +110,22 @@ const emit = defineEmits<{
     >
       <SvgIcon :name="sortAscending ? 'arrow-up' : 'arrow-down'" :size="18" />
     </button>
+
+    <template v-if="translationEnabled">
+      <span class="app-toolbar__separator" aria-hidden="true" />
+
+      <button
+        type="button"
+        :class="{ 'is-pressed': batchActive }"
+        :aria-pressed="batchActive"
+        title="현재 폴더의 이미지와 압축파일을 일괄 번역"
+        :disabled="!canBatchTranslate"
+        @click="emit('show-batch-translation')"
+      >
+        <SvgIcon class="app-toolbar__icon" name="auto" />
+        <span>일괄 번역</span>
+      </button>
+    </template>
 
     <span class="app-toolbar__separator" aria-hidden="true" />
 

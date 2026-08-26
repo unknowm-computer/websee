@@ -943,7 +943,21 @@ async function enterArchiveBrowser(item: MediaItem): Promise<void> {
     }
 
     if (!index.items.length) {
-      showError('압축파일은 정상이지만 WebSee에서 지원하는 이미지나 텍스트가 없습니다.')
+      const nestedArchiveCount = index.nestedArchivePaths.length
+      if (nestedArchiveCount === 1) {
+        const nestedArchivePath = index.nestedArchivePaths[0]
+        showError(
+          `압축파일 안에 "${nestedArchivePath}"이 들어 있습니다. `
+          + '중첩 압축은 지원하지 않으므로 바깥 압축을 풀고 내부 압축파일을 직접 열어주세요.',
+        )
+      } else if (nestedArchiveCount > 1) {
+        showError(
+          `압축파일 안에 다른 압축파일 ${nestedArchiveCount}개가 들어 있습니다. `
+          + '중첩 압축은 지원하지 않으므로 바깥 압축을 풀고 내부 압축파일을 직접 열어주세요.',
+        )
+      } else {
+        showError('압축파일은 정상이지만 WebSee에서 지원하는 이미지나 텍스트가 없습니다.')
+      }
       return
     }
 
@@ -1384,6 +1398,15 @@ function moveSelection(delta: number): void {
 }
 
 function handleBrowserKeydown(event: KeyboardEvent): void {
+  if (event.key === 'F1') {
+    event.preventDefault()
+    if (batchTranslationDialogOpen.value) return
+    optionsOpen.value = false
+    helpOpen.value = true
+    if (document.fullscreenElement) void document.exitFullscreen()
+    return
+  }
+
   const target = event.target
   if (target instanceof HTMLInputElement || target instanceof HTMLSelectElement) return
   if (target instanceof Element && target.closest('.folder-tree')) return

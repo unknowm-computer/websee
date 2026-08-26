@@ -65,5 +65,6 @@ export interface ArchiveIndex {
   format: ArchiveFormat
   data: ArrayBuffer
   items: MediaItem[]
+  nestedArchivePaths: string[]
   tree: MediaDirectoryNode
 }

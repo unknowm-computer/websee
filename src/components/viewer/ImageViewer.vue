@@ -241,10 +241,6 @@ function setZoomMode(mode: Exclude<ViewerZoomMode, "custom">): void {
   persistZoomPreference();
 }
 
-function toggleFitActual(): void {
-  setZoomMode(zoomMode.value === "actual" ? "fit" : "actual");
-}
-
 function changeZoomAroundAnchor(
   multiplier: number,
   anchor: { x: number; y: number },
@@ -502,12 +498,22 @@ function endDrag(event: PointerEvent): void {
 }
 
 function handleKeydown(event: KeyboardEvent): void {
+  const eventTarget = event.target;
+  if (
+    eventTarget instanceof Element &&
+    eventTarget.closest(".dialog-backdrop")
+  )
+    return;
+
   if (event.key === "Escape") {
     if (!document.fullscreenElement) emit("close");
     return;
   }
 
   const lowerKey = event.key.toLowerCase();
+  const canToggleImageEnhancement = Boolean(currentItem.value) && !imageFailed.value;
+  const canToggleTranslationOverlay =
+    props.translationEnabled && Boolean(translationResult.value?.regions.length);
   const handled =
     [
       "ArrowLeft",
@@ -519,7 +525,12 @@ function handleKeydown(event: KeyboardEvent): void {
       "=",
       "-",
       "0",
-    ].includes(event.key) || ["f", "r"].includes(lowerKey);
+      "1",
+      "2",
+    ].includes(event.key) ||
+    ["f", "r"].includes(lowerKey) ||
+    (lowerKey === "e" && canToggleImageEnhancement) ||
+    (lowerKey === "t" && canToggleTranslationOverlay);
   if (handled) event.preventDefault();
 
   if (event.key === "ArrowLeft" || event.key === "ArrowUp") moveBy(-1);
@@ -531,7 +542,13 @@ function handleKeydown(event: KeyboardEvent): void {
     moveBy(1);
   if (event.key === "+" || event.key === "=") changeZoom(1.2);
   if (event.key === "-") changeZoom(1 / 1.2);
-  if (event.key === "0") toggleFitActual();
+  if (event.key === "0") setZoomMode("fit");
+  if (event.key === "1") setZoomMode("actual");
+  if (event.key === "2") setZoomMode("width");
+  if (lowerKey === "e" && canToggleImageEnhancement)
+    toggleImageEnhancement();
+  if (lowerKey === "t" && canToggleTranslationOverlay)
+    toggleTranslationOverlay();
   if (lowerKey === "r") rotateClockwise();
   if (lowerKey === "f") void toggleFullscreen();
 }
@@ -665,6 +682,7 @@ onBeforeUnmount(() => {
       </button>
       <button
         type="button"
+        title="화면 맞춤 (0)"
         aria-label="화면 맞춤"
         :class="{ 'is-pressed': zoomMode === 'fit' }"
         @click="setZoomMode('fit')"
@@ -674,6 +692,7 @@ onBeforeUnmount(() => {
       </button>
       <button
         type="button"
+        title="폭 맞춤 (2)"
         aria-label="폭 맞춤"
         :class="{ 'is-pressed': zoomMode === 'width' }"
         @click="setZoomMode('width')"
@@ -683,7 +702,7 @@ onBeforeUnmount(() => {
       </button>
       <button
         type="button"
-        title="실제 크기 (100%)"
+        title="실제 크기 (100%, 1)"
         aria-label="실제 크기 (100%)"
         :class="{ 'is-pressed': zoomMode === 'actual' }"
         @click="setZoomMode('actual')"
@@ -693,7 +712,7 @@ onBeforeUnmount(() => {
       <span class="image-viewer__separator" />
       <button
         type="button"
-        :title="imageEnhancementButtonLabel"
+        :title="`${imageEnhancementButtonLabel} (E)`"
         :aria-label="imageEnhancementButtonLabel"
         :aria-pressed="imageEnhancementEnabled"
         :class="{ 'is-pressed': imageEnhancementEnabled }"
@@ -822,6 +841,7 @@ onBeforeUnmount(() => {
         />
         <ImageTranslationOverlay
           v-if="
+            translationEnabled &&
             hasTranslationResult &&
             translationOverlayVisible &&
             translationResult
@@ -838,7 +858,7 @@ onBeforeUnmount(() => {
         <span>{{ currentItem?.name }}</span>
       </div>
       <ImageTranslationStatus
-        v-if="translationStatusVisible"
+        v-if="translationEnabled && translationStatusVisible"
         :progress="translationProgress"
         :processing="translationProcessing"
         @cancel="currentItem && toggleImageTranslation(currentItem)"
@@ -847,7 +867,11 @@ onBeforeUnmount(() => {
         @close="dismissTranslationStatus"
       />
       <aside
-        v-else-if="hasTranslationResult && translationResult?.regions.length"
+        v-else-if="
+          translationEnabled &&
+          hasTranslationResult &&
+          translationResult?.regions.length
+        "
         class="image-viewer__translation-layer-control"
         aria-label="번역 레이어 표시 설정"
         @pointerdown.stop
@@ -860,8 +884,8 @@ onBeforeUnmount(() => {
           :aria-pressed="translationOverlayVisible"
           :title="
             translationOverlayVisible
-              ? '번역 레이어 숨기기'
-              : '번역 레이어 표시하기'
+              ? '번역 레이어 숨기기 (T)'
+              : '번역 레이어 표시하기 (T)'
           "
           @click="toggleTranslationOverlay"
         >

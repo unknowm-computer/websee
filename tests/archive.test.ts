@@ -115,4 +115,19 @@ describe('archive sources', () => {
 
     expect(index.items.map((item) => item.path)).toEqual(['photo.jpg'])
   })
+
+  it('reports nested archives when no directly supported media exists', async () => {
+    const nestedArchiveBytes = zipSync({
+      'page.jpg': strToU8('image'),
+    })
+    const archiveBytes = zipSync({
+      'zz/IMG_5.zip': nestedArchiveBytes,
+    })
+    const archive = new File([archiveBytes], 'zz.zip', { type: 'application/zip' })
+
+    const index = await loadArchiveIndex(archive)
+
+    expect(index.items).toHaveLength(0)
+    expect(index.nestedArchivePaths).toEqual(['zz/IMG_5.zip'])
+  })
 })

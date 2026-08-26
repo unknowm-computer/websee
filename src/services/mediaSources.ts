@@ -9,6 +9,7 @@ import {
   getImageMimeType,
   getFileFormat,
   getDirectoryPath,
+  isArchiveFileName,
   isImageFileName,
   isRarArchiveFileName,
   isSupportedMediaFileName,
@@ -170,6 +171,7 @@ async function loadZipArchiveIndex(file: File, data: ArrayBuffer): Promise<Archi
   const archiveId = `archive-index:${file.name}:${file.size}:${file.lastModified}`
   const decodedEntryNames = readZipEntryNames(bytes)
   const items: MediaItem[] = []
+  const nestedArchivePaths: string[] = []
   let entryIndex = 0
 
   await new Promise<void>((resolve, reject) => {
@@ -180,6 +182,14 @@ async function loadZipArchiveIndex(file: File, data: ArrayBuffer): Promise<Archi
           const currentEntryIndex = entryIndex
           const decodedPath = decodedEntryNames[currentEntryIndex] ?? entry.name
           entryIndex += 1
+
+          if (
+            !decodedPath.endsWith('/')
+            && !isMacosArchiveMetadata(decodedPath)
+            && isArchiveFileName(decodedPath)
+          ) {
+            nestedArchivePaths.push(decodedPath)
+          }
 
           const supportedEntry = isImageFileName(decodedPath) || isTextFileName(decodedPath)
           if (
@@ -217,6 +227,7 @@ async function loadZipArchiveIndex(file: File, data: ArrayBuffer): Promise<Archi
     format: 'zip',
     data,
     items,
+    nestedArchivePaths,
     tree: buildDirectoryTree(file.name, items),
   }
 }
@@ -224,6 +235,9 @@ async function loadZipArchiveIndex(file: File, data: ArrayBuffer): Promise<Archi
 async function loadRarArchiveIndex(file: File, data: ArrayBuffer): Promise<ArchiveIndex> {
   const archiveId = `archive-index:${file.name}:${file.size}:${file.lastModified}`
   const entries = await listRarEntries(data)
+  const nestedArchivePaths = entries
+    .map((entry) => entry.path.replaceAll('\\', '/'))
+    .filter((path) => !isMacosArchiveMetadata(path) && isArchiveFileName(path))
   const items = entries
     .filter((entry) =>
       !isMacosArchiveMetadata(entry.path)
@@ -253,6 +267,7 @@ async function loadRarArchiveIndex(file: File, data: ArrayBuffer): Promise<Archi
     format: 'rar',
     data,
     items,
+    nestedArchivePaths,
     tree: buildDirectoryTree(file.name, items),
   }
 }
