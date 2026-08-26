@@ -9,6 +9,7 @@ import arrowUpUrl from "@/images/icons/arrow_up.svg";
 import autoUrl from "@/images/icons/auto.svg";
 import closeUrl from "@/images/icons/close.svg";
 import docsUrl from "@/images/icons/docs.svg";
+import downloadForOfflineUrl from "@/images/icons/download_for_offline.svg";
 import fileUrl from "@/images/icons/file.svg";
 import fitScreenUrl from "@/images/icons/fit_screen.svg";
 import fitWidthUrl from "@/images/icons/fit_width.svg";
@@ -38,6 +39,7 @@ const iconUrls = {
   auto: autoUrl,
   close: closeUrl,
   docs: docsUrl,
+  "download-for-offline": downloadForOfflineUrl,
   file: fileUrl,
   "fit-screen": fitScreenUrl,
   "fit-width": fitWidthUrl,

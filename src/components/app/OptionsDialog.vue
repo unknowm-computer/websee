@@ -11,13 +11,6 @@ import {
   IMAGE_TRANSLATION_MODELS,
   IMAGE_TRANSLATION_MODEL_TOTAL_BYTES,
 } from "@/services/imageTranslation/modelManifest";
-import { requestDirectoryWritePermission } from "@/services/imageTranslation/translationSidecar";
-import {
-  deleteAllTranslationSidecars,
-  deleteOrphanedTranslationSidecars,
-  scanTranslationSidecars,
-  type TranslationSidecarSummary,
-} from "@/services/imageTranslation/translationSidecarManagement";
 import type {
   MediaListColumnKey,
   MediaListColumnVisibility,
@@ -26,18 +19,9 @@ import { formatBytes } from "@/utils/media";
 
 interface Props {
   fileListColumns: MediaListColumnVisibility;
-  translationDirectoryHandle?: FileSystemDirectoryHandle;
-  translationFolderLabel?: string;
-  translationManagementDisabled?: boolean;
 }
 
-type TranslationDataAction = "all" | "orphans";
-
-const props = withDefaults(defineProps<Props>(), {
-  translationDirectoryHandle: undefined,
-  translationFolderLabel: "현재 폴더",
-  translationManagementDisabled: false,
-});
+defineProps<Props>();
 
 const emit = defineEmits<{
   (event: "close"): void;
@@ -60,57 +44,13 @@ const modelClearing = ref(false);
 const modelMessage = ref("");
 const modelFailed = ref(false);
 
-const emptyTranslationSummary = (): TranslationSidecarSummary => ({
-  fileCount: 0,
-  orphanBytes: 0,
-  orphanCount: 0,
-  totalBytes: 0,
-});
-const translationSummary = ref<TranslationSidecarSummary>(
-  emptyTranslationSummary(),
-);
-const translationLoading = ref(true);
-const translationDeleting = ref(false);
-const translationMessage = ref("");
-const translationFailed = ref(false);
-const pendingTranslationAction = ref<TranslationDataAction>();
-
 const cacheDescription = computed(() => {
   if (modelLoading.value) return "저장된 모델 데이터를 확인하는 중입니다.";
   if (!cachedData.value.count) return "저장된 모델 데이터가 없습니다.";
   return `${cachedData.value.count}/${IMAGE_TRANSLATION_MODELS.length}개 모델 · ${formatBytes(cachedData.value.bytes)}`;
 });
 
-const translationDescription = computed(() => {
-  if (!props.translationDirectoryHandle)
-    return "폴더 열기로 연 현재 폴더에서만 관리할 수 있습니다.";
-  if (translationLoading.value)
-    return "저장된 번역 데이터를 확인하는 중입니다.";
-  if (!translationSummary.value.fileCount)
-    return "저장된 번역 데이터가 없습니다.";
-
-  const description = `${translationSummary.value.fileCount}개 JSON · ${formatBytes(translationSummary.value.totalBytes)}`;
-  if (!translationSummary.value.orphanCount) return description;
-  return `${description} · 사용하지 않는 데이터 ${translationSummary.value.orphanCount}개 (${formatBytes(translationSummary.value.orphanBytes)})`;
-});
-
-const confirmationDescription = computed(() => {
-  if (pendingTranslationAction.value === "orphans") {
-    return `원본 파일이 없는 번역 데이터 ${translationSummary.value.orphanCount}개를 삭제합니다.`;
-  }
-  return `'${props.translationFolderLabel}'의 번역 데이터 ${translationSummary.value.fileCount}개를 모두 삭제합니다.`;
-});
-
-const dialogBusy = computed(
-  () => modelClearing.value || translationDeleting.value,
-);
-const translationActionsDisabled = computed(
-  () =>
-    !props.translationDirectoryHandle ||
-    translationLoading.value ||
-    dialogBusy.value ||
-    props.translationManagementDisabled,
-);
+const dialogBusy = computed(() => modelClearing.value);
 
 function requestClose(): void {
   if (!dialogBusy.value) emit("close");
@@ -159,80 +99,8 @@ async function clearModelData(): Promise<void> {
   }
 }
 
-async function refreshTranslationData(clearMessage = true): Promise<void> {
-  const directoryHandle = props.translationDirectoryHandle;
-  translationLoading.value = true;
-  translationFailed.value = false;
-  if (clearMessage) translationMessage.value = "";
-  if (!directoryHandle) {
-    translationSummary.value = emptyTranslationSummary();
-    translationLoading.value = false;
-    return;
-  }
-
-  try {
-    translationSummary.value = await scanTranslationSidecars(directoryHandle);
-  } catch (error) {
-    translationFailed.value = true;
-    translationMessage.value =
-      error instanceof Error
-        ? error.message
-        : "저장된 폴더 번역 데이터를 확인하지 못했습니다.";
-  } finally {
-    translationLoading.value = false;
-  }
-}
-
-function requestTranslationAction(action: TranslationDataAction): void {
-  translationMessage.value = "";
-  translationFailed.value = false;
-  pendingTranslationAction.value = action;
-}
-
-async function confirmTranslationAction(): Promise<void> {
-  const directoryHandle = props.translationDirectoryHandle;
-  const action = pendingTranslationAction.value;
-  if (
-    !directoryHandle ||
-    !action ||
-    dialogBusy.value ||
-    props.translationManagementDisabled
-  )
-    return;
-
-  translationDeleting.value = true;
-  translationFailed.value = false;
-  translationMessage.value = "";
-  try {
-    const permissionGranted =
-      await requestDirectoryWritePermission(directoryHandle);
-    if (!permissionGranted)
-      throw new Error("현재 폴더의 쓰기 권한이 필요합니다.");
-
-    if (action === "orphans") {
-      const deletedCount =
-        await deleteOrphanedTranslationSidecars(directoryHandle);
-      translationMessage.value = `사용하지 않는 번역 데이터 ${deletedCount}개를 삭제했습니다.`;
-    } else {
-      await deleteAllTranslationSidecars(directoryHandle);
-      translationMessage.value = "현재 폴더의 번역 데이터를 모두 삭제했습니다.";
-    }
-    pendingTranslationAction.value = undefined;
-    await refreshTranslationData(false);
-  } catch (error) {
-    translationFailed.value = true;
-    translationMessage.value =
-      error instanceof Error
-        ? error.message
-        : "폴더 번역 데이터를 삭제하지 못했습니다.";
-  } finally {
-    translationDeleting.value = false;
-  }
-}
-
 onMounted(() => {
   void refreshCachedData();
-  void refreshTranslationData();
 });
 </script>
 
@@ -304,83 +172,6 @@ onMounted(() => {
           </p>
         </section>
 
-        <section aria-labelledby="translation-data-title">
-          <h2 id="translation-data-title">폴더 번역 데이터</h2>
-          <p>
-            <strong>{{ translationFolderLabel }}</strong
-            >의 <code>.websee</code>에 저장된 번역 결과를 관리합니다. 압축파일은
-            내부 이미지가 여러 장이어도 JSON 하나로 셉니다.
-          </p>
-          <div
-            class="options-dialog__status options-dialog__translation-status"
-          >
-            <span>{{ translationDescription }}</span>
-            <div class="options-dialog__translation-actions">
-              <button
-                type="button"
-                :disabled="
-                  translationActionsDisabled ||
-                  translationSummary.orphanCount === 0
-                "
-                @click="requestTranslationAction('orphans')"
-              >
-                사용하지 않는 데이터 정리
-              </button>
-              <button
-                type="button"
-                :disabled="
-                  translationActionsDisabled ||
-                  translationSummary.fileCount === 0
-                "
-                @click="requestTranslationAction('all')"
-              >
-                현재 폴더 데이터 삭제
-              </button>
-            </div>
-          </div>
-
-          <div
-            v-if="pendingTranslationAction"
-            class="options-dialog__confirmation"
-            role="alertdialog"
-            aria-labelledby="translation-confirmation-title"
-          >
-            <strong id="translation-confirmation-title">삭제할까요?</strong>
-            <span>{{ confirmationDescription }}</span>
-            <div>
-              <button
-                type="button"
-                :disabled="dialogBusy"
-                @click="confirmTranslationAction"
-              >
-                {{ translationDeleting ? "삭제 중" : "삭제" }}
-              </button>
-              <button
-                type="button"
-                :disabled="dialogBusy"
-                @click="pendingTranslationAction = undefined"
-              >
-                취소
-              </button>
-            </div>
-          </div>
-
-          <p
-            v-if="translationMessage"
-            class="options-dialog__message"
-            :class="{ 'is-error': translationFailed }"
-            :role="translationFailed ? 'alert' : 'status'"
-          >
-            {{ translationMessage }}
-          </p>
-          <p v-if="translationManagementDisabled" class="options-dialog__note">
-            일괄 번역 중에는 폴더 번역 데이터를 관리할 수 없습니다.
-          </p>
-          <p v-else class="options-dialog__note">
-            사용하지 않는 데이터 정리는 원본 이미지나 압축파일이 사라진 JSON만
-            삭제합니다.
-          </p>
-        </section>
       </div>
 
       <footer>
@@ -462,8 +253,7 @@ onMounted(() => {
     background: var(--color-face);
     border: 1px solid var(--color-shadow);
 
-    > button,
-    > div {
+    > button {
       flex: 0 0 auto;
     }
   }
@@ -483,30 +273,6 @@ onMounted(() => {
     }
   }
 
-  &__translation-status {
-    align-items: flex-start;
-  }
-
-  &__translation-actions {
-    display: grid;
-    gap: 5px;
-  }
-
-  &__confirmation {
-    display: grid;
-    gap: 7px;
-    padding: 9px;
-    margin-top: 10px;
-    background: #fff7db;
-    border: 1px solid #a7832d;
-
-    > div {
-      display: flex;
-      gap: 6px;
-      justify-content: flex-end;
-    }
-  }
-
   &__message {
     margin-top: 10px !important;
     color: #165e25;
@@ -519,10 +285,6 @@ onMounted(() => {
   &__note {
     margin: 10px 0 0 !important;
     color: var(--color-muted);
-  }
-
-  code {
-    font: inherit;
   }
 
   button {

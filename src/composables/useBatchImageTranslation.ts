@@ -1,5 +1,6 @@
 import { computed, onBeforeUnmount, reactive } from 'vue'
 
+import { createAttentionSound } from '@/services/attentionSound'
 import { ImageTranslationRunner } from '@/services/imageTranslation/imageTranslationRunner'
 import {
   isChromeTranslatorSupported,
@@ -54,6 +55,7 @@ function describeError(error: unknown, fallback: string): string {
 export function useBatchImageTranslation() {
   const state = reactive<BatchTranslationState>(createInitialState())
   const active = computed(() => ACTIVE_PHASES.has(state.phase))
+  const attentionSound = createAttentionSound()
   let runner: ImageTranslationRunner | undefined
   let controller: AbortController | undefined
   let runSequence = 0
@@ -82,7 +84,8 @@ export function useBatchImageTranslation() {
     signal: AbortSignal,
   ): Promise<void> {
     state.phase = 'awaiting-translation'
-    state.message = `${sourceLanguage.toUpperCase()} → 한국어 번역 모델을 준비하려면 번역 계속을 눌러주세요.`
+    state.message = `${sourceLanguage.toUpperCase()} → 한국어 번역 모델을 받으려면 ‘번역 모델 받기’ 버튼을 눌러주세요.`
+    attentionSound.play()
     return new Promise<void>((resolve, reject) => {
       const handleAbort = (): void => {
         pendingTranslationStart = undefined
@@ -176,6 +179,7 @@ export function useBatchImageTranslation() {
       controller = undefined
       return
     }
+    attentionSound.prepare()
     state.phase = 'requesting-permission'
     state.message = '번역 결과를 저장할 폴더 권한을 확인하는 중입니다.'
 
@@ -251,6 +255,7 @@ export function useBatchImageTranslation() {
         controller = undefined
         pendingTranslationStart = undefined
         resumePausedRun = undefined
+        attentionSound.dispose()
       }
     }
   }
@@ -293,6 +298,7 @@ export function useBatchImageTranslation() {
     controller = undefined
     pendingTranslationStart = undefined
     resumePausedRun = undefined
+    attentionSound.dispose()
   }
 
   onBeforeUnmount(dispose)

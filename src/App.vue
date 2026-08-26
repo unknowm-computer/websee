@@ -3,6 +3,7 @@ import { computed, nextTick, onBeforeUnmount, onMounted, reactive, ref, shallowR
 
 import AppToolbar from '@/components/app/AppToolbar.vue'
 import BatchTranslationDialog from '@/components/app/BatchTranslationDialog.vue'
+import BatchTranslationMiniStatus from '@/components/app/BatchTranslationMiniStatus.vue'
 import HelpDialog from '@/components/app/HelpDialog.vue'
 import OptionsDialog from '@/components/app/OptionsDialog.vue'
 import StatusBar from '@/components/app/StatusBar.vue'
@@ -316,10 +317,7 @@ const batchFolderLabel = computed(() =>
 )
 const canBatchTranslate = computed(() =>
   batchTranslationActive.value
-  || Boolean(
-    directoryHandleCache.get(selectedDirectory.value)
-    && (batchImageCount.value > 0 || batchArchiveCount.value > 0),
-  ),
+  || Boolean(directoryHandleCache.get(selectedDirectory.value)),
 )
 
 function readViewMode(): MediaViewMode {
@@ -1631,6 +1629,13 @@ onBeforeUnmount(() => {
       </button>
     </div>
 
+    <BatchTranslationMiniStatus
+      v-if="batchTranslationActive && !batchTranslationDialogOpen"
+      :state="batchTranslationState"
+      @continue="continueBatchTranslation"
+      @open="batchTranslationDialogOpen = true"
+    />
+
     <ImageViewer
       v-if="viewerOpen && viewerCurrentId"
       :items="viewerItems"
@@ -1656,15 +1661,14 @@ onBeforeUnmount(() => {
     <OptionsDialog
       v-if="optionsOpen"
       :file-list-columns="fileListColumns"
-      :translation-directory-handle="directoryHandleCache.get(selectedDirectory)"
-      :translation-folder-label="batchFolderLabel"
-      :translation-management-disabled="batchTranslationActive"
       @close="optionsOpen = false"
       @set-file-list-column="setFileListColumn"
     />
     <BatchTranslationDialog
       v-if="batchTranslationDialogOpen"
       :archive-count="batchArchiveCount"
+      :directory-handle="directoryHandleCache.get(selectedDirectory)"
+      :folder-label="batchFolderLabel"
       :image-count="batchImageCount"
       :state="batchTranslationState"
       @close="batchTranslationDialogOpen = false"

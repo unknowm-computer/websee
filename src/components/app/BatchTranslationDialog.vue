@@ -2,6 +2,7 @@
 import { computed, ref } from 'vue'
 
 import SvgIcon from '@/components/common/SvgIcon.vue'
+import TranslationDataManagement from '@/components/app/TranslationDataManagement.vue'
 import type {
   BatchTranslationOptions,
   BatchTranslationState,
@@ -9,6 +10,8 @@ import type {
 
 interface Props {
   archiveCount: number
+  directoryHandle?: FileSystemDirectoryHandle
+  folderLabel: string
   imageCount: number
   state: BatchTranslationState
 }
@@ -26,6 +29,7 @@ const emit = defineEmits<{
 
 const includeArchives = ref(true)
 const skipExisting = ref(true)
+const translationDataBusy = ref(false)
 
 const active = computed(() => [
   'requesting-permission',
@@ -35,11 +39,14 @@ const active = computed(() => [
   'paused',
   'stopping',
 ].includes(props.state.phase))
+const awaitingTranslation = computed(() => props.state.phase === 'awaiting-translation')
 const terminal = computed(() => ['completed', 'stopped', 'error'].includes(props.state.phase))
 const canStart = computed(() =>
-  props.imageCount > 0 || (includeArchives.value && props.archiveCount > 0),
+  !translationDataBusy.value
+  && (props.imageCount > 0 || (includeArchives.value && props.archiveCount > 0)),
 )
 function start(): void {
+  if (translationDataBusy.value) return
   emit('start', {
     includeArchives: includeArchives.value,
     skipExisting: skipExisting.value,
@@ -47,7 +54,15 @@ function start(): void {
 }
 
 function handleBackdropClick(): void {
-  if (!active.value) emit('close')
+  if (!active.value) requestClose()
+}
+
+function requestClose(): void {
+  if (!translationDataBusy.value) emit('close')
+}
+
+function handleEscape(): void {
+  if (!active.value) requestClose()
 }
 </script>
 
@@ -58,6 +73,8 @@ function handleBackdropClick(): void {
       role="dialog"
       aria-modal="true"
       aria-labelledby="batch-translation-title"
+      :aria-busy="translationDataBusy"
+      @keydown.esc.stop.prevent="handleEscape"
     >
       <header>
         <strong id="batch-translation-title">
@@ -67,7 +84,8 @@ function handleBackdropClick(): void {
         <button
           type="button"
           :aria-label="active ? '일괄 번역 창 숨기기' : '일괄 번역 창 닫기'"
-          @click="emit('close')"
+          :disabled="translationDataBusy"
+          @click="requestClose"
         >
           <SvgIcon name="close" :size="17" />
         </button>
@@ -75,7 +93,7 @@ function handleBackdropClick(): void {
 
       <div class="batch-translation-dialog__body">
         <section v-if="!active" class="batch-translation-dialog__settings">
-          <strong>{{ state.folderLabel || '현재 폴더' }}</strong>
+          <strong>{{ state.folderLabel || folderLabel }}</strong>
           <label>
             <input type="checkbox" checked disabled />
             현재 폴더의 이미지 {{ imageCount }}개
@@ -91,6 +109,13 @@ function handleBackdropClick(): void {
           <p>하위 폴더는 포함하지 않습니다. 압축파일은 하나씩 열어 내부 이미지를 순서대로 처리합니다.</p>
           <p>시작할 때 원본 폴더의 쓰기 권한을 요청합니다.</p>
         </section>
+
+        <TranslationDataManagement
+          v-if="!active"
+          :directory-handle="directoryHandle"
+          :folder-label="folderLabel"
+          @busy-change="translationDataBusy = $event"
+        />
 
         <section
           v-if="active || terminal"
@@ -116,7 +141,7 @@ function handleBackdropClick(): void {
             <div><dt>건너뜀</dt><dd>{{ state.counts.skipped }}</dd></div>
             <div><dt>실패</dt><dd>{{ state.counts.failed }}</dd></div>
           </dl>
-          <details v-if="state.errors.length">
+          <details v-if="state.errors.length" class="batch-translation-dialog__errors">
             <summary>처리하지 못한 항목 {{ state.errors.length }}개</summary>
             <ul>
               <li v-for="error in state.errors" :key="error">{{ error }}</li>
@@ -130,14 +155,16 @@ function handleBackdropClick(): void {
       </div>
 
       <footer>
+        <button
+          v-if="awaitingTranslation"
+          class="batch-translation-dialog__model-download"
+          type="button"
+          @click="emit('continue')"
+        >
+          <SvgIcon name="download-for-offline" :size="18" />
+          번역 모델 받기
+        </button>
         <template v-if="active">
-          <button
-            v-if="state.phase === 'awaiting-translation'"
-            type="button"
-            @click="emit('continue')"
-          >
-            번역 계속
-          </button>
           <button v-if="state.phase === 'running'" type="button" @click="emit('pause')">
             일시정지
           </button>
@@ -155,7 +182,7 @@ function handleBackdropClick(): void {
         <button v-else type="button" :disabled="!canStart" @click="start">
           {{ terminal ? '다시 실행' : '시작' }}
         </button>
-        <button type="button" @click="emit('close')">
+        <button type="button" :disabled="translationDataBusy" @click="requestClose">
           {{ active ? '창 숨기기' : '닫기' }}
         </button>
       </footer>
@@ -198,7 +225,9 @@ function handleBackdropClick(): void {
   &__body {
     display: grid;
     gap: 10px;
+    max-height: min(72vh, 680px);
     padding: 16px;
+    overflow-y: auto;
   }
 
   &__settings,
@@ -271,7 +300,7 @@ function handleBackdropClick(): void {
     }
   }
 
-  details {
+  &__errors {
     color: #8e2424;
 
     ul {
@@ -307,6 +336,16 @@ function handleBackdropClick(): void {
     gap: 6px;
     justify-content: flex-end;
     padding: 0 12px 12px;
+
+    .batch-translation-dialog__model-download {
+      display: inline-flex;
+      gap: 5px;
+      align-items: center;
+      margin-right: auto;
+      font-weight: 700;
+      color: #fff;
+      background: var(--color-selection);
+    }
   }
 }
 </style>
