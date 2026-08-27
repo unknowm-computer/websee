@@ -288,6 +288,11 @@ export function useBatchImageTranslation() {
     resumePausedRun?.()
   }
 
+  function reset(): void {
+    if (active.value) return
+    resetState('')
+  }
+
   function dispose(): void {
     runSequence += 1
     controller?.abort()
@@ -307,6 +312,7 @@ export function useBatchImageTranslation() {
     active,
     continueTranslation,
     pause,
+    reset,
     resume,
     start,
     state,

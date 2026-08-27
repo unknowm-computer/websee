@@ -98,7 +98,11 @@ async function* createBatchTranslationEvents(
 export function createBatchTranslationRun(
   options: CreateBatchTranslationRunOptions,
 ): BatchTranslationRun | undefined {
-  const sourceItems = [...options.items]
+  const selectedItemIds = options.translationOptions.selectedItemIds
+    ? new Set(options.translationOptions.selectedItemIds)
+    : undefined
+  const sourceItems = options.items
+    .filter((item) => !selectedItemIds || selectedItemIds.has(item.id))
     .sort((left, right) => naturalCompare(left.path, right.path))
   const images = sourceItems.filter((item) => item.kind === 'image')
   const archives = options.translationOptions.includeArchives

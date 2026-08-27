@@ -15,6 +15,7 @@ export type BatchTranslationPhase =
 
 export interface BatchTranslationOptions {
   includeArchives: boolean
+  selectedItemIds?: string[]
   skipExisting: boolean
 }
 

@@ -1,68 +1,99 @@
 <script setup lang="ts">
-import { computed, ref } from 'vue'
+import { computed, ref } from "vue";
 
-import SvgIcon from '@/components/common/SvgIcon.vue'
-import TranslationDataManagement from '@/components/app/TranslationDataManagement.vue'
+import TranslationDataManagement from "@/components/app/TranslationDataManagement.vue";
+import SvgIcon from "@/components/common/SvgIcon.vue";
 import type {
   BatchTranslationOptions,
   BatchTranslationState,
-} from '@/types/batchTranslation'
+} from "@/types/batchTranslation";
+import type { MediaItem } from "@/types/media";
 
 interface Props {
-  archiveCount: number
-  directoryHandle?: FileSystemDirectoryHandle
-  folderLabel: string
-  imageCount: number
-  state: BatchTranslationState
+  archiveCount: number;
+  directoryHandle?: FileSystemDirectoryHandle;
+  folderLabel: string;
+  imageCount: number;
+  initialSelectedItemId?: string;
+  items: readonly MediaItem[];
+  state: BatchTranslationState;
 }
 
-const props = defineProps<Props>()
+const props = defineProps<Props>();
 
 const emit = defineEmits<{
-  (event: 'close'): void
-  (event: 'continue'): void
-  (event: 'pause'): void
-  (event: 'resume'): void
-  (event: 'start', options: BatchTranslationOptions): void
-  (event: 'stop'): void
-}>()
+  (event: "close"): void;
+  (event: "continue"): void;
+  (event: "pause"): void;
+  (event: "resume"): void;
+  (event: "start", options: BatchTranslationOptions): void;
+  (event: "stop"): void;
+}>();
 
-const includeArchives = ref(true)
-const skipExisting = ref(true)
-const translationDataBusy = ref(false)
+const includeArchives = ref(true);
+const selectFiles = ref(false);
+const selectedItemIds = ref<string[]>(
+  props.initialSelectedItemId &&
+    props.items.some((item) => item.id === props.initialSelectedItemId)
+    ? [props.initialSelectedItemId]
+    : [],
+);
+const skipExisting = ref(true);
+const translationDataBusy = ref(false);
 
-const active = computed(() => [
-  'requesting-permission',
-  'running',
-  'awaiting-translation',
-  'pausing',
-  'paused',
-  'stopping',
-].includes(props.state.phase))
-const awaitingTranslation = computed(() => props.state.phase === 'awaiting-translation')
-const terminal = computed(() => ['completed', 'stopped', 'error'].includes(props.state.phase))
-const canStart = computed(() =>
-  !translationDataBusy.value
-  && (props.imageCount > 0 || (includeArchives.value && props.archiveCount > 0)),
-)
+const active = computed(() =>
+  [
+    "requesting-permission",
+    "running",
+    "awaiting-translation",
+    "pausing",
+    "paused",
+    "stopping",
+  ].includes(props.state.phase),
+);
+const awaitingTranslation = computed(
+  () => props.state.phase === "awaiting-translation",
+);
+const terminal = computed(() =>
+  ["completed", "stopped", "error"].includes(props.state.phase),
+);
+const selectedItemCount = computed(() => selectedItemIds.value.length);
+const canStart = computed(
+  () =>
+    !translationDataBusy.value &&
+    (selectFiles.value
+      ? selectedItemCount.value > 0
+      : props.imageCount > 0 ||
+        (includeArchives.value && props.archiveCount > 0)),
+);
+
+function selectAllItems(): void {
+  selectedItemIds.value = props.items.map((item) => item.id);
+}
+
+function clearSelectedItems(): void {
+  selectedItemIds.value = [];
+}
+
 function start(): void {
-  if (translationDataBusy.value) return
-  emit('start', {
-    includeArchives: includeArchives.value,
+  if (translationDataBusy.value) return;
+  emit("start", {
+    includeArchives: selectFiles.value ? true : includeArchives.value,
+    selectedItemIds: selectFiles.value ? [...selectedItemIds.value] : undefined,
     skipExisting: skipExisting.value,
-  })
+  });
 }
 
 function handleBackdropClick(): void {
-  if (!active.value) requestClose()
+  if (!active.value) requestClose();
 }
 
 function requestClose(): void {
-  if (!translationDataBusy.value) emit('close')
+  if (!translationDataBusy.value) emit("close");
 }
 
 function handleEscape(): void {
-  if (!active.value) requestClose()
+  if (!active.value) requestClose();
 }
 </script>
 
@@ -98,15 +129,65 @@ function handleEscape(): void {
             <input type="checkbox" checked disabled />
             현재 폴더의 이미지 {{ imageCount }}개
           </label>
-          <label>
-            <input v-model="includeArchives" type="checkbox" :disabled="archiveCount === 0" />
+          <label v-if="!selectFiles">
+            <input
+              v-model="includeArchives"
+              type="checkbox"
+              :disabled="archiveCount === 0"
+            />
             압축파일 {{ archiveCount }}개 내부 이미지 포함
           </label>
           <label>
             <input v-model="skipExisting" type="checkbox" />
             저장된 번역 결과가 있으면 건너뛰기
           </label>
-          <p>하위 폴더는 포함하지 않습니다. 압축파일은 하나씩 열어 내부 이미지를 순서대로 처리합니다.</p>
+          <label>
+            <input
+              v-model="selectFiles"
+              type="checkbox"
+              aria-controls="batch-translation-file-selection"
+              :aria-expanded="selectFiles"
+            />
+            번역할 파일 직접 선택
+          </label>
+          <section
+            v-if="selectFiles"
+            id="batch-translation-file-selection"
+            class="batch-translation-dialog__file-selection"
+            aria-label="번역할 파일 선택"
+          >
+            <div class="batch-translation-dialog__file-selection-heading">
+              <strong
+                >선택 {{ selectedItemCount }}개 / 전체
+                {{ items.length }}개</strong
+              >
+              <span>
+                <button type="button" @click="selectAllItems">전체 선택</button>
+                <button type="button" @click="clearSelectedItems">
+                  전체 해제
+                </button>
+              </span>
+            </div>
+            <div class="batch-translation-dialog__file-selection-list">
+              <label
+                v-for="selectableItem in items"
+                :key="selectableItem.id"
+                class="batch-translation-dialog__file-selection-item"
+                :title="selectableItem.path"
+              >
+                <input
+                  v-model="selectedItemIds"
+                  type="checkbox"
+                  :value="selectableItem.id"
+                />
+                <span>{{ selectableItem.name }}</span>
+              </label>
+            </div>
+          </section>
+          <p>
+            하위 폴더는 포함하지 않습니다. 압축파일은 하나씩 열어 내부 이미지를
+            순서대로 처리합니다.
+          </p>
           <p>시작할 때 원본 폴더의 쓰기 권한을 요청합니다.</p>
         </section>
 
@@ -132,16 +213,34 @@ function handleEscape(): void {
             :value="state.counts.processed"
             :max="Math.max(1, state.counts.discovered)"
           />
-          <span v-if="state.currentItemName" class="batch-translation-dialog__current">
+          <span
+            v-if="state.currentItemName"
+            class="batch-translation-dialog__current"
+          >
             {{ state.currentItemName }}
           </span>
           <dl>
-            <div><dt>발견</dt><dd>{{ state.counts.discovered }}</dd></div>
-            <div><dt>완료</dt><dd>{{ state.counts.translated }}</dd></div>
-            <div><dt>건너뜀</dt><dd>{{ state.counts.skipped }}</dd></div>
-            <div><dt>실패</dt><dd>{{ state.counts.failed }}</dd></div>
+            <div>
+              <dt>발견</dt>
+              <dd>{{ state.counts.discovered }}</dd>
+            </div>
+            <div>
+              <dt>완료</dt>
+              <dd>{{ state.counts.translated }}</dd>
+            </div>
+            <div>
+              <dt>건너뜀</dt>
+              <dd>{{ state.counts.skipped }}</dd>
+            </div>
+            <div>
+              <dt>실패</dt>
+              <dd>{{ state.counts.failed }}</dd>
+            </div>
           </dl>
-          <details v-if="state.errors.length" class="batch-translation-dialog__errors">
+          <details
+            v-if="state.errors.length"
+            class="batch-translation-dialog__errors"
+          >
             <summary>처리하지 못한 항목 {{ state.errors.length }}개</summary>
             <ul>
               <li v-for="error in state.errors" :key="error">{{ error }}</li>
@@ -150,7 +249,8 @@ function handleEscape(): void {
         </section>
 
         <p v-if="active" class="batch-translation-dialog__note">
-          바깥 영역이나 Esc로는 닫히지 않습니다. 창 숨기기를 눌러도 작업은 계속됩니다.
+          바깥 영역이나 Esc로는 닫히지 않습니다. 창 숨기기를 눌러도 작업은
+          계속됩니다.
         </p>
       </div>
 
@@ -165,10 +265,18 @@ function handleEscape(): void {
           번역 모델 받기
         </button>
         <template v-if="active">
-          <button v-if="state.phase === 'running'" type="button" @click="emit('pause')">
+          <button
+            v-if="state.phase === 'running'"
+            type="button"
+            @click="emit('pause')"
+          >
             일시정지
           </button>
-          <button v-if="state.phase === 'paused'" type="button" @click="emit('resume')">
+          <button
+            v-if="state.phase === 'paused'"
+            type="button"
+            @click="emit('resume')"
+          >
             계속
           </button>
           <button
@@ -176,14 +284,18 @@ function handleEscape(): void {
             :disabled="state.phase === 'stopping'"
             @click="emit('stop')"
           >
-            {{ state.phase === 'stopping' ? '중지 중' : '중지' }}
+            {{ state.phase === "stopping" ? "중지 중" : "중지" }}
           </button>
         </template>
         <button v-else type="button" :disabled="!canStart" @click="start">
-          {{ terminal ? '다시 실행' : '시작' }}
+          {{ terminal ? "다시 실행" : "시작" }}
         </button>
-        <button type="button" :disabled="translationDataBusy" @click="requestClose">
-          {{ active ? '창 숨기기' : '닫기' }}
+        <button
+          type="button"
+          :disabled="translationDataBusy"
+          @click="requestClose"
+        >
+          {{ active ? "창 숨기기" : "닫기" }}
         </button>
       </footer>
     </section>
@@ -196,7 +308,9 @@ function handleEscape(): void {
   color: var(--color-window-text);
   background: var(--color-face);
   border: 1px solid var(--color-shadow-dark);
-  box-shadow: inset 1px 1px var(--color-light), 4px 5px 15px rgb(0 0 0 / 35%);
+  box-shadow:
+    inset 1px 1px var(--color-light),
+    4px 5px 15px rgb(0 0 0 / 35%);
 
   > header {
     display: flex;
@@ -240,7 +354,7 @@ function handleEscape(): void {
   }
 
   &__settings {
-    label {
+    > label {
       display: flex;
       gap: 8px;
       align-items: center;
@@ -249,6 +363,65 @@ function handleEscape(): void {
     p {
       margin: 0;
       color: var(--color-muted);
+    }
+  }
+
+  &__file-selection {
+    display: grid;
+    gap: 6px;
+    padding: 8px;
+    background: var(--color-face);
+    border: 1px solid;
+    border-color: var(--color-shadow) var(--color-light) var(--color-light)
+      var(--color-shadow);
+  }
+
+  &__file-selection-heading {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+    justify-content: space-between;
+
+    > span {
+      display: flex;
+      gap: 4px;
+    }
+
+    button {
+      min-height: 24px;
+      padding: 2px 7px;
+    }
+  }
+
+  &__file-selection-list {
+    display: grid;
+    max-height: 190px;
+    overflow-y: auto;
+    background: #fff;
+    border: 1px solid var(--color-shadow);
+  }
+
+  &__file-selection-item {
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr);
+    gap: 7px;
+    align-items: center;
+    min-height: 27px;
+    padding: 3px 7px;
+    border-bottom: 1px solid var(--color-face);
+
+    &:last-child {
+      border-bottom: 0;
+    }
+
+    &:hover {
+      background: var(--color-highlight);
+    }
+
+    span {
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
     }
   }
 
@@ -323,8 +496,8 @@ function handleEscape(): void {
     color: var(--color-window-text);
     background: var(--color-face);
     border: 1px solid;
-    border-color: var(--color-light) var(--color-shadow-dark) var(--color-shadow-dark)
-      var(--color-light);
+    border-color: var(--color-light) var(--color-shadow-dark)
+      var(--color-shadow-dark) var(--color-light);
 
     &:disabled {
       color: var(--color-disabled);

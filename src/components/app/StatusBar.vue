@@ -1,15 +1,31 @@
 <script setup lang="ts">
+import { computed } from 'vue'
+
 import type { MediaItem } from '@/types/media'
 import { formatBytes } from '@/utils/media'
 
 interface Props {
   item?: MediaItem
   imageCount: number
+  itemPath?: string
   taskStatus?: string
   totalCount: number
 }
 
-defineProps<Props>()
+const props = defineProps<Props>()
+
+const displayedPath = computed(() => {
+  const fullPath = props.itemPath ?? props.item?.path ?? ''
+  const separatorIndex = fullPath.lastIndexOf('/')
+  if (separatorIndex < 0) return { directory: '', name: fullPath }
+
+  let nameStart = separatorIndex + 1
+  while (fullPath[nameStart] === ' ') nameStart += 1
+  return {
+    directory: fullPath.slice(0, nameStart),
+    name: fullPath.slice(nameStart),
+  }
+})
 </script>
 
 <template>
@@ -19,7 +35,12 @@ defineProps<Props>()
       <template v-if="taskStatus"> · {{ taskStatus }}</template>
     </span>
     <template v-if="item">
-      <span class="status-bar__name" :title="item.path">{{ item.name }}</span>
+      <span class="status-bar__path" :title="itemPath ?? item.path">
+        <span v-if="displayedPath.directory" class="status-bar__path-directory">
+          <bdi dir="ltr">{{ displayedPath.directory }}</bdi>
+        </span>
+        <bdi class="status-bar__path-name" dir="ltr">{{ displayedPath.name }}</bdi>
+      </span>
       <span>
         {{ item.kind === 'archive-parent' || item.kind === 'folder' || item.kind === 'folder-parent' ? '—' : formatBytes(item.size) }}
       </span>
@@ -54,6 +75,32 @@ defineProps<Props>()
 
   &__count {
     min-width: 190px !important;
+  }
+
+  &__path {
+    display: flex;
+    align-items: center;
+    text-align: left;
+  }
+
+  &__path-directory {
+    flex: 0 1 auto;
+    min-width: 0;
+    overflow: hidden;
+    color: var(--color-muted);
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    direction: rtl;
+  }
+
+  &__path-name {
+    flex: 0 0 auto;
+    min-width: 0;
+    max-width: 100%;
+    overflow: hidden;
+    color: var(--color-window-text);
+    text-overflow: ellipsis;
+    white-space: nowrap;
   }
 
   &__empty {

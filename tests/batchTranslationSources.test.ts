@@ -75,4 +75,29 @@ describe('batch translation sources', () => {
     }
     expect(labels).toEqual(['cover.jpg'])
   })
+
+  it('queues only explicitly selected top-level files', async () => {
+    const directory = createDirectoryHandle()
+    const firstImage = createMediaItem(new File(['first'], '001.jpg', { type: 'image/jpeg' }))
+    const secondImage = createMediaItem(new File(['second'], '002.jpg', { type: 'image/jpeg' }))
+    const archive = createMediaItem(new File([zipSync({
+      '003.jpg': strToU8('third'),
+    })], 'book.cbz', { type: 'application/zip' }))
+    const run = createBatchTranslationRun({
+      directoryHandle: directory.handle,
+      folderLabel: 'samples',
+      items: [firstImage, secondImage, archive],
+      translationOptions: {
+        includeArchives: true,
+        selectedItemIds: [secondImage.id, archive.id],
+        skipExisting: true,
+      },
+    })
+
+    const labels: string[] = []
+    for await (const event of run?.events ?? []) {
+      if (event.type === 'task') labels.push(event.task.label)
+    }
+    expect(labels).toEqual(['002.jpg', 'book.cbz / 003.jpg'])
+  })
 })

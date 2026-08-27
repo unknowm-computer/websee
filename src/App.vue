@@ -1,5 +1,15 @@
 <script setup lang="ts">
-import { computed, nextTick, onBeforeUnmount, onMounted, reactive, ref, shallowRef, watch } from 'vue'
+import {
+  computed,
+  nextTick,
+  onBeforeUnmount,
+  onMounted,
+  reactive,
+  ref,
+  shallowReactive,
+  shallowRef,
+  watch,
+} from 'vue'
 
 import AppToolbar from '@/components/app/AppToolbar.vue'
 import BatchTranslationDialog from '@/components/app/BatchTranslationDialog.vue'
@@ -121,7 +131,8 @@ let archivePreviewRequest = 0
 let archivePreviewTimer: number | undefined
 let archiveIndexingRun = 0
 let pendingFolderRefresh: CollectionRestoreState | undefined
-let directoryHandleCache = new Map<string, FileSystemDirectoryHandle>()
+const directoryHandleCache = shallowReactive(new Map<string, FileSystemDirectoryHandle>())
+let batchTranslationContext: BatchTranslationContext | undefined
 const directoryLoadRequests = new Map<string, Promise<void>>()
 let directoryCollectionGeneration = 0
 let directoryNavigationRequest = 0
@@ -129,6 +140,11 @@ let directoryNavigationRequest = 0
 interface CollectionRestoreState {
   directoryPath: string
   itemPath?: string
+}
+
+interface BatchTranslationContext {
+  collection: MediaCollection
+  directoryPath: string
 }
 
 interface UseCollectionOptions {
@@ -151,6 +167,7 @@ const {
   active: batchTranslationActive,
   continueTranslation: continueBatchTranslation,
   pause: pauseBatchTranslation,
+  reset: resetBatchTranslation,
   resume: resumeBatchTranslation,
   start: startBatchTranslation,
   state: batchTranslationState,
@@ -302,6 +319,28 @@ const selectedTreeNodeId = computed(() => {
 const selectedBrowserItem = computed(() =>
   browserItems.value.find((item) => item.id === browserSelectedId.value),
 )
+const selectedStatusPath = computed(() => {
+  const item = selectedBrowserItem.value
+  const activeCollection = collection.value
+  if (!item || !activeCollection) return undefined
+
+  const parts: string[] = []
+  if (activeCollection.kind === 'folder') parts.push(activeCollection.name)
+
+  if (archiveBrowsing.value) {
+    const archiveItem = archiveOuterItemId.value
+      ? activeCollection.items.find((candidate) => candidate.id === archiveOuterItemId.value)
+      : undefined
+    if (archiveItem?.path) parts.push(archiveItem.path)
+    const archivePath = item.kind === 'archive-parent' ? item.navigationPath : item.path
+    if (archivePath) parts.push(archivePath)
+  } else {
+    const itemPath = item.kind === 'folder-parent' ? item.navigationPath : item.path
+    if (itemPath) parts.push(itemPath)
+  }
+
+  return parts.join('/') || item.name
+})
 const selectedTextPreviewItem = computed(() => {
   const item = selectedBrowserItem.value
   if (item?.kind === 'text') return item
@@ -318,12 +357,23 @@ const batchSourceItems = computed(() =>
       && (item.kind === 'image' || item.kind === 'archive'),
   ),
 )
+const batchSelectableItems = computed(() =>
+  sortMediaItems(batchSourceItems.value, sortKey.value, sortAscending.value),
+)
 const batchImageCount = computed(() =>
   batchSourceItems.value.filter((item) => item.kind === 'image').length,
 )
 const batchArchiveCount = computed(() =>
   batchSourceItems.value.filter((item) => item.kind === 'archive').length,
 )
+const batchInitialSelectedItemId = computed(() => {
+  const selectedId = archiveBrowsing.value
+    ? archiveOuterItemId.value
+    : selectedBrowserItem.value?.id
+  return batchSourceItems.value.some((item) => item.id === selectedId)
+    ? selectedId
+    : undefined
+})
 const batchFolderLabel = computed(() =>
   selectedDirectoryNode.value?.name ?? collection.value?.name ?? '현재 폴더',
 )
@@ -590,7 +640,10 @@ async function useCollection(
   directoryCollectionGeneration += 1
   directoryNavigationRequest += 1
   directoryLoadRequests.clear()
-  directoryHandleCache = options.directoryHandles ?? new Map()
+  directoryHandleCache.clear()
+  for (const [path, handle] of options.directoryHandles ?? []) {
+    directoryHandleCache.set(path, handle)
+  }
   currentDirectoryHandle.value = options.directoryHandle
   collection.value = nextCollection
   const restoredNode = options.restore?.directoryPath
@@ -1362,12 +1415,38 @@ function createCurrentBatchTranslationRun(options: BatchTranslationOptions) {
   })
 }
 
+function batchTranslationContextMatchesCurrentFolder(): boolean {
+  return Boolean(
+    batchTranslationContext
+    && batchTranslationContext.collection === collection.value
+    && batchTranslationContext.directoryPath === selectedDirectory.value,
+  )
+}
+
+function showBatchTranslationDialog(): void {
+  if (
+    !batchTranslationActive.value
+    && batchTranslationContext
+    && !batchTranslationContextMatchesCurrentFolder()
+  ) {
+    resetBatchTranslation()
+    batchTranslationContext = undefined
+  }
+  batchTranslationDialogOpen.value = true
+}
+
 function handleStartBatchTranslation(options: BatchTranslationOptions): void {
   if (!translationEnabled.value) return
   const run = createCurrentBatchTranslationRun(options)
   if (!run) {
     showError('현재 폴더에서 일괄 번역할 이미지나 압축파일을 찾지 못했습니다.')
     return
+  }
+  const activeCollection = collection.value
+  if (!activeCollection) return
+  batchTranslationContext = {
+    collection: activeCollection,
+    directoryPath: selectedDirectory.value,
   }
   void startBatchTranslation(run)
 }
@@ -1537,7 +1616,7 @@ onBeforeUnmount(() => {
       @open-images="imageInput?.click()"
       @open-archive="archiveInput?.click()"
       @refresh="refreshCollection"
-      @show-batch-translation="batchTranslationDialogOpen = true"
+      @show-batch-translation="showBatchTranslationDialog"
       @set-view="setViewMode"
       @set-sort="setSortKey"
       @toggle-sort-direction="sortAscending = !sortAscending"
@@ -1648,6 +1727,7 @@ onBeforeUnmount(() => {
     <StatusBar
       :item="selectedBrowserItem"
       :image-count="statusImageCount"
+      :item-path="selectedStatusPath"
       :task-status="archiveIndexingStatus"
       :total-count="statusTotalCount"
     />
@@ -1703,7 +1783,7 @@ onBeforeUnmount(() => {
       v-if="batchTranslationActive && !batchTranslationDialogOpen"
       :state="batchTranslationState"
       @continue="continueBatchTranslation"
-      @open="batchTranslationDialogOpen = true"
+      @open="showBatchTranslationDialog"
     />
 
     <ImageViewer
@@ -1747,6 +1827,8 @@ onBeforeUnmount(() => {
       :directory-handle="directoryHandleCache.get(selectedDirectory)"
       :folder-label="batchFolderLabel"
       :image-count="batchImageCount"
+      :initial-selected-item-id="batchInitialSelectedItemId"
+      :items="batchSelectableItems"
       :state="batchTranslationState"
       @close="batchTranslationDialogOpen = false"
       @continue="continueBatchTranslation"
