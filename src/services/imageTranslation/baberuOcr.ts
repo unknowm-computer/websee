@@ -1,4 +1,7 @@
-import { getOnnxRuntime } from '@/services/imageTranslation/onnxRuntime'
+import {
+  createInferenceSession,
+  getOnnxRuntime,
+} from '@/services/imageTranslation/onnxRuntime'
 import type { ImageBounds } from '@/types/imageTranslation'
 
 const OCR_SIZE = 224
@@ -163,17 +166,18 @@ export class BaberuOcr {
   ) {}
 
   static async create(models: BaberuModels): Promise<BaberuOcr> {
-    const ort = getOnnxRuntime()
     const vocab = new BaberuVocab(models.vocab)
-    const options: import('onnxruntime-web').InferenceSession.SessionOptions = {
-      executionProviders: ['wasm'],
+    const options: Omit<
+      import('onnxruntime-web').InferenceSession.SessionOptions,
+      'executionProviders'
+    > = {
       graphOptimizationLevel: 'all',
     }
-    const visionSession = await ort.InferenceSession.create(models.vision, options)
+    const visionSession = await createInferenceSession(models.vision, options)
     let prefillSession: import('onnxruntime-web').InferenceSession | undefined
     try {
-      prefillSession = await ort.InferenceSession.create(models.prefill, options)
-      const stepSession = await ort.InferenceSession.create(models.step, options)
+      prefillSession = await createInferenceSession(models.prefill, options)
+      const stepSession = await createInferenceSession(models.step, options)
       return new BaberuOcr(
         visionSession,
         prefillSession,

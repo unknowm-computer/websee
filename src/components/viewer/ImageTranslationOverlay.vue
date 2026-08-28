@@ -87,6 +87,11 @@ function getRegionStyle(region: ImageTranslationRegion): CSSProperties {
     background: rgb(255 255 255 / 94%);
     border: 1px solid rgb(0 0 0 / 28%);
     box-shadow: 0 1px 3px rgb(0 0 0 / 24%);
+    pointer-events: auto;
+
+    &:hover {
+      z-index: 1;
+    }
 
     &.is-bubble {
       border-radius: 45%;

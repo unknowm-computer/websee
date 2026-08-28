@@ -1,4 +1,7 @@
-import { getOnnxRuntime } from '@/services/imageTranslation/onnxRuntime'
+import {
+  createInferenceSession,
+  getOnnxRuntime,
+} from '@/services/imageTranslation/onnxRuntime'
 import { createDetectorTargetSize } from '@/services/imageTranslation/detectorGeometry'
 import type { ImageBounds, TranslationRegionKind } from '@/types/imageTranslation'
 
@@ -160,9 +163,7 @@ export class ComicLayoutDetector {
   private constructor(private readonly session: import('onnxruntime-web').InferenceSession) {}
 
   static async create(model: ArrayBuffer): Promise<ComicLayoutDetector> {
-    const ort = getOnnxRuntime()
-    const session = await ort.InferenceSession.create(model, {
-      executionProviders: ['wasm'],
+    const session = await createInferenceSession(model, {
       graphOptimizationLevel: 'all',
     })
     return new ComicLayoutDetector(session)
