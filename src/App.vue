@@ -1205,7 +1205,7 @@ async function openArchiveEntry(item: MediaItem): Promise<void> {
     cacheArchiveEntry(index, item, file)
     archivePreviewItemId.value = item.id
     viewerSource.value = 'archive'
-    viewerItems.value = archiveItems.value.filter(
+    viewerItems.value = archiveDirectoryItems.value.filter(
       (candidate) => candidate.kind === 'archive-entry',
     )
     viewerCurrentId.value = item.id
