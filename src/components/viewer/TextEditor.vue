@@ -22,6 +22,24 @@ const emit = defineEmits<{
 const editorContainer = ref<HTMLElement>()
 let editorView: EditorView | undefined
 
+const KOREAN_EDITOR_PHRASES = {
+  'Find': '찾기',
+  'Replace': '바꾸기',
+  'next': '다음',
+  'previous': '이전',
+  'all': '모두',
+  'match case': '대/소문자 구분',
+  'regexp': '정규식',
+  'by word': '단어 단위',
+  'replace': '바꾸기',
+  'replace all': '모두 바꾸기',
+  'close': '닫기',
+  'current match': '현재 일치 항목',
+  'on line': '줄',
+  'replaced match on line $': '$번째 줄의 일치 항목을 바꿨습니다',
+  'replaced $ matches': '일치 항목 $개를 바꿨습니다',
+} satisfies Record<string, string>
+
 function getLanguageExtension(format: string): Extension[] {
   if (format === 'JSON') return [json()]
   if (format === 'SMI') return [html()]
@@ -40,6 +58,7 @@ onMounted(async () => {
         basicSetup,
         EditorView.lineWrapping,
         EditorView.cspNonce.of(CODEMIRROR_CSP_NONCE),
+        EditorState.phrases.of(KOREAN_EDITOR_PHRASES),
         EditorView.contentAttributes.of({ 'aria-label': '텍스트 편집기' }),
         EditorView.updateListener.of((update) => {
           if (update.docChanged) emit('update:modelValue', update.state.doc.toString())
