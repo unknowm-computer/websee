@@ -12,7 +12,7 @@ const IMAGE_EXTENSIONS = new Set([
   'webp',
 ])
 
-const TEXT_EXTENSIONS = new Set(['text', 'txt'])
+const TEXT_EXTENSIONS = new Set(['json', 'smi', 'srt', 'text', 'txt'])
 
 const MIME_TYPES: Record<string, string> = {
   avif: 'image/avif',
@@ -206,7 +206,12 @@ export function buildDirectoryTree(
   return root
 }
 
-export function createMediaItem(file: File, path = file.name, idPrefix = ''): MediaItem {
+export function createMediaItem(
+  file: File,
+  path = file.name,
+  idPrefix = '',
+  fileHandle?: FileSystemFileHandle,
+): MediaItem {
   const normalizedPath = normalizePath(path) || file.name
   const prefix = idPrefix ? `${idPrefix}:` : ''
 
@@ -221,6 +226,7 @@ export function createMediaItem(file: File, path = file.name, idPrefix = ''): Me
     path: normalizedPath,
     directoryPath: getDirectoryPath(normalizedPath),
     file,
+    fileHandle,
     size: file.size,
     format: getFileFormat(file.name),
     lastModified: file.lastModified,

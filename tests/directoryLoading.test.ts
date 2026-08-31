@@ -57,6 +57,7 @@ describe('directory lazy loading', () => {
     const level = await loadDirectoryLevel(asDirectoryHandle(childDirectory), 'child')
 
     expect(level.items.map((item) => item.path)).toEqual(['child/nested.jpg'])
+    expect(level.items[0].fileHandle).toBe(nestedImage)
     expect(level.children.map((node) => node.path)).toEqual(['child/grandchild'])
     expect(nestedImage.getFile).toHaveBeenCalledOnce()
   })

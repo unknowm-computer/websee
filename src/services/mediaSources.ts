@@ -32,6 +32,12 @@ export interface LoadedDirectoryCollection {
   handles: Map<string, FileSystemDirectoryHandle>
 }
 
+export function getFileHandleLookupKey(
+  file: Pick<File, 'lastModified' | 'name' | 'size'>,
+): string {
+  return `${file.name}:${file.size}:${file.lastModified}`
+}
+
 function createCollection(
   name: string,
   kind: MediaCollection['kind'],
@@ -92,7 +98,7 @@ export async function loadDirectoryLevel(
         nextFileIndex += 1
         const { entry, path } = fileEntries[index]
         const file = await entry.getFile()
-        items[index] = createMediaItem(file, path)
+        items[index] = createMediaItem(file, path, '', entry)
       }
     },
   )
@@ -143,7 +149,10 @@ export async function loadDirectoryHandle(
   }
 }
 
-export function loadSelectedFiles(files: readonly File[]): MediaCollection {
+export function loadSelectedFiles(
+  files: readonly File[],
+  fileHandles: ReadonlyMap<string, FileSystemFileHandle> = new Map(),
+): MediaCollection {
   const mediaFiles = files.filter((file) => isSupportedMediaFileName(file.name))
   const firstRelativePath = mediaFiles[0]?.webkitRelativePath ?? ''
   const rootName = firstRelativePath.split('/')[0] || '선택한 파일'
@@ -153,7 +162,7 @@ export function loadSelectedFiles(files: readonly File[]): MediaCollection {
       ? relativePath.slice(rootName.length + 1)
       : relativePath || file.name
 
-    return createMediaItem(file, path)
+    return createMediaItem(file, path, '', fileHandles.get(getFileHandleLookupKey(file)))
   })
 
   return createCollection(rootName, mediaFiles.some((file) => file.webkitRelativePath) ? 'folder' : 'files', items)

@@ -10,6 +10,9 @@
     "test": "vitest run"
   },
   "dependencies": {
+    "@codemirror/lang-html": "^6.4.12",
+    "@codemirror/lang-json": "^6.0.2",
+    "codemirror": "^6.0.2",
     "fflate": "^0.8.2",
     "node-unrar-js": "^2.0.2",
     "onnxruntime-web": "^1.27.0",

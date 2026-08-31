@@ -27,6 +27,12 @@ const emit = defineEmits<{
           파일은 왼쪽에서 미리 보고 상세보기로 열 수 있습니다. 압축파일의 이미지
           썸네일과 해상도는 뒤에서 순서대로 만듭니다.
         </p>
+        <p>
+          TXT, TEXT, JSON, SRT, SMI 파일은 상세보기의 <strong>편집</strong> 버튼으로
+          수정할 수 있습니다. 원본 쓰기 권한이 있으면 바로 저장하고, 권한이 없거나
+          압축파일 내부의 텍스트이면 <strong>다른 이름으로 저장</strong>을 사용합니다.
+          편집 중에는 <kbd>Cmd</kbd>/<kbd>Ctrl</kbd> + <kbd>S</kbd>로 저장할 수 있습니다.
+        </p>
         <dl>
           <div>
             <dt><kbd>F1</kbd></dt>
@@ -34,7 +40,7 @@ const emit = defineEmits<{
           </div>
           <div>
             <dt><kbd>Enter</kbd></dt>
-            <dd>상세보기 열기·닫기</dd>
+            <dd>상세보기 열기·닫기 (텍스트 편집 중에는 줄바꿈)</dd>
           </div>
           <div>
             <dt><kbd>Esc</kbd></dt>
@@ -120,7 +126,8 @@ const emit = defineEmits<{
           이미지는 파일별 JSON으로, 압축파일은 압축파일별 JSON 하나로 보존하며
           다음에 열 때 자동으로 불러옵니다. 현재 폴더의 저장 용량 확인·사용하지
           않는 데이터 정리·전체 삭제는 <strong>일괄 번역</strong> 창에서 할 수
-          있습니다.
+          있습니다. 이미지 파일만 드래그한 경우에는 <strong>번역</strong> 버튼을
+          처음 누를 때 원본 폴더를 선택하면 저장된 결과를 먼저 불러옵니다.
         </p>
         <p>
           <strong>일괄 번역</strong>은 현재 폴더의 이미지와 선택한 압축파일 내부

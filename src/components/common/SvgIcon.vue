@@ -13,6 +13,8 @@ import closeUrl from "@/images/icons/close.svg";
 import deleteUrl from "@/images/icons/delete.svg";
 import docsUrl from "@/images/icons/docs.svg";
 import downloadForOfflineUrl from "@/images/icons/download_for_offline.svg";
+import editUrl from "@/images/icons/edit.svg";
+import editOffUrl from "@/images/icons/edit_off.svg";
 import fileUrl from "@/images/icons/file.svg";
 import fitScreenUrl from "@/images/icons/fit_screen.svg";
 import fitWidthUrl from "@/images/icons/fit_width.svg";
@@ -30,6 +32,8 @@ import realSizeUrl from "@/images/icons/real_size.svg";
 import refreshUrl from "@/images/icons/refresh.svg";
 import removeUrl from "@/images/icons/remove.svg";
 import rotateUrl from "@/images/icons/rotate.svg";
+import saveUrl from "@/images/icons/save.svg";
+import saveAsUrl from "@/images/icons/save_as.svg";
 import zoomInUrl from "@/images/icons/zoom_in.svg";
 import zoomOutUrl from "@/images/icons/zoom_out.svg";
 
@@ -45,6 +49,8 @@ const iconUrls = {
   close: closeUrl,
   docs: docsUrl,
   "download-for-offline": downloadForOfflineUrl,
+  edit: editUrl,
+  "edit-off": editOffUrl,
   file: fileUrl,
   "fit-screen": fitScreenUrl,
   "fit-width": fitWidthUrl,
@@ -62,6 +68,8 @@ const iconUrls = {
   minus: removeUrl,
   remove: deleteUrl,
   rotate: rotateUrl,
+  save: saveUrl,
+  "save-as": saveAsUrl,
   "zoom-in": zoomInUrl,
   "zoom-out": zoomOutUrl,
   "real-size": realSizeUrl,

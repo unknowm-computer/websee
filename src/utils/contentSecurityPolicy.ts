@@ -1,0 +1,1 @@
+export const CODEMIRROR_CSP_NONCE = 'V2ViU2VlQ29kZU1pcnJvcjIwMjY'

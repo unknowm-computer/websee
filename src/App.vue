@@ -31,6 +31,7 @@ import { useObjectUrls } from '@/composables/useObjectUrls'
 import { useResizableMediaPanes } from '@/composables/useResizableMediaPanes'
 import {
   extractArchiveEntry,
+  getFileHandleLookupKey,
   loadArchiveIndex,
   loadDirectoryHandle,
   loadDirectoryLevel,
@@ -45,6 +46,11 @@ import {
   saveTranslationSidecar,
   type TranslationSidecarTarget,
 } from '@/services/imageTranslation/translationSidecar'
+import {
+  pickTranslationSourceDirectory,
+  TranslationSourceDirectoryMismatchError,
+  type TranslationDirectoryPicker,
+} from '@/services/imageTranslation/translationSourceDirectory'
 import type { ImageTranslationResult } from '@/types/imageTranslation'
 import type {
   BatchTranslationOptions,
@@ -778,17 +784,34 @@ async function handleArchiveSelection(event: Event): Promise<void> {
   input.value = ''
 }
 
-async function getDroppedDirectoryHandles(
+interface DroppedFileSystemHandles {
+  directories: FileSystemDirectoryHandle[]
+  files: Map<string, FileSystemFileHandle>
+}
+
+async function getDroppedFileSystemHandles(
   dataTransfer: DataTransfer,
-): Promise<FileSystemDirectoryHandle[]> {
+): Promise<DroppedFileSystemHandles> {
   const handleRequests = [...dataTransfer.items]
     .filter((item) => item.kind === 'file' && item.getAsFileSystemHandle)
-    .map((item) => item.getAsFileSystemHandle?.())
-  const handles = await Promise.all(handleRequests)
-
-  return handles.filter(
-    (handle): handle is FileSystemDirectoryHandle => handle?.kind === 'directory',
+    .map((item) => ({
+      file: item.getAsFile(),
+      handle: item.getAsFileSystemHandle?.(),
+    }))
+  const entries = await Promise.all(
+    handleRequests.map(async ({ file, handle }) => ({ file, handle: await handle })),
   )
+  const directories: FileSystemDirectoryHandle[] = []
+  const files = new Map<string, FileSystemFileHandle>()
+
+  for (const { file, handle } of entries) {
+    if (handle?.kind === 'directory') directories.push(handle)
+    else if (file && handle?.kind === 'file') {
+      files.set(getFileHandleLookupKey(file), handle)
+    }
+  }
+
+  return { directories, files }
 }
 
 async function handleDrop(event: DragEvent): Promise<void> {
@@ -796,15 +819,17 @@ async function handleDrop(event: DragEvent): Promise<void> {
   dragActive.value = false
   const dataTransfer = event.dataTransfer
   if (!dataTransfer) return
+  const files = [...dataTransfer.files]
+  let droppedHandles!: DroppedFileSystemHandles
 
   try {
-    const directoryHandles = await getDroppedDirectoryHandles(dataTransfer)
-    if (directoryHandles.length > 1) {
+    droppedHandles = await getDroppedFileSystemHandles(dataTransfer)
+    if (droppedHandles.directories.length > 1) {
       showError('폴더는 한 번에 하나씩 놓아주세요.')
       return
     }
-    if (directoryHandles[0]) {
-      const handle = directoryHandles[0]
+    if (droppedHandles.directories[0]) {
+      const handle = droppedHandles.directories[0]
       loadingMessage.value = `${handle.name} 폴더의 이미지, 텍스트와 압축파일을 찾는 중입니다...`
       loading.value = true
       const loadedDirectory = await loadDirectoryHandle(handle)
@@ -822,7 +847,6 @@ async function handleDrop(event: DragEvent): Promise<void> {
     loading.value = false
   }
 
-  const files = [...dataTransfer.files]
   if (!files.length) return
 
   if (files.length === 1 && isArchiveFileName(files[0].name)) {
@@ -830,12 +854,20 @@ async function handleDrop(event: DragEvent): Promise<void> {
     return
   }
 
-  const nextCollection = loadSelectedFiles(files)
+  const nextCollection = loadSelectedFiles(files, droppedHandles.files)
   if (!nextCollection.items.length) {
     showError('지원하는 이미지, 텍스트 또는 압축파일을 놓아주세요.')
     return
   }
   await useCollection(nextCollection)
+
+  const droppedItem = nextCollection.items[0]
+  if (
+    files.length === 1
+    && (droppedItem.kind === 'image' || droppedItem.kind === 'text')
+  ) {
+    openViewer(droppedItem.id)
+  }
 }
 
 function handleDragEnter(event: DragEvent): void {
@@ -974,6 +1006,21 @@ function openTextViewer(item: MediaItem): void {
 
 function closeTextViewer(): void {
   textViewerItem.value = undefined
+}
+
+function handleTextFileSaved(itemId: string, file: File): void {
+  const items = collection.value?.items
+  const itemIndex = items?.findIndex((item) => item.id === itemId) ?? -1
+  if (!items || itemIndex < 0) return
+
+  const updatedItem: MediaItem = {
+    ...items[itemIndex],
+    file,
+    size: file.size,
+    lastModified: file.lastModified,
+  }
+  items[itemIndex] = updatedItem
+  if (textViewerItem.value?.id === itemId) textViewerItem.value = updatedItem
 }
 
 async function enterArchiveBrowser(item: MediaItem): Promise<void> {
@@ -1373,6 +1420,30 @@ function getTranslationSidecarTarget(item: MediaItem): TranslationSidecarTarget 
     : undefined
 }
 
+function getTranslationSourceItem(item: MediaItem): MediaItem | undefined {
+  if (item.kind === 'image') return item
+  if (item.kind !== 'archive-entry' || !archiveOuterItemId.value) return undefined
+  return collection.value?.items.find((candidate) => candidate.id === archiveOuterItemId.value)
+}
+
+async function requestDraggedTranslationDirectory(item: MediaItem): Promise<void> {
+  const sourceItem = getTranslationSourceItem(item)
+  const picker = window.showDirectoryPicker?.bind(window) as TranslationDirectoryPicker | undefined
+  if (!sourceItem?.fileHandle || !picker) return
+
+  try {
+    const directoryHandle = await pickTranslationSourceDirectory(sourceItem, picker)
+    if (directoryHandle) directoryHandleCache.set(sourceItem.directoryPath, directoryHandle)
+  } catch (error) {
+    if (error instanceof DOMException && error.name === 'AbortError') return
+    if (error instanceof TranslationSourceDirectoryMismatchError) {
+      showError('드래그한 원본 파일이 들어 있는 폴더를 선택해주세요.')
+      return
+    }
+    showError('원본 폴더를 열지 못했습니다. 폴더 접근 권한을 확인해주세요.')
+  }
+}
+
 async function loadSavedTranslation(
   item: MediaItem,
 ): Promise<ImageTranslationResult | undefined> {
@@ -1381,7 +1452,11 @@ async function loadSavedTranslation(
 }
 
 async function prepareTranslationPersistence(item: MediaItem): Promise<boolean> {
-  const target = getTranslationSidecarTarget(item)
+  let target = getTranslationSidecarTarget(item)
+  if (!target) {
+    await requestDraggedTranslationDirectory(item)
+    target = getTranslationSidecarTarget(item)
+  }
   return target ? await requestTranslationSidecarPermission(target) : false
 }
 
@@ -1808,6 +1883,7 @@ onBeforeUnmount(() => {
       v-if="textViewerItem"
       :item="textViewerItem"
       @close="closeTextViewer"
+      @saved="handleTextFileSaved"
     />
 
     <HelpDialog v-if="helpOpen" @close="helpOpen = false" />

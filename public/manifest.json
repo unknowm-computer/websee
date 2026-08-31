@@ -29,6 +29,6 @@
     "https://*.hf.co/*"
   ],
   "content_security_policy": {
-    "extension_pages": "script-src 'self' 'wasm-unsafe-eval'; object-src 'none'; connect-src 'self' https://huggingface.co https://*.huggingface.co https://*.hf.co; style-src 'self' https://cdn.jsdelivr.net; font-src 'self' https://cdn.jsdelivr.net"
+    "extension_pages": "script-src 'self' 'wasm-unsafe-eval'; object-src 'none'; connect-src 'self' https://huggingface.co https://*.huggingface.co https://*.hf.co; style-src 'self' 'nonce-V2ViU2VlQ29kZU1pcnJvcjIwMjY' https://cdn.jsdelivr.net; font-src 'self' https://cdn.jsdelivr.net"
   }
 }

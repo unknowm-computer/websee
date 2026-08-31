@@ -29,6 +29,7 @@ export interface MediaItem {
   path: string
   directoryPath: string
   file: File
+  fileHandle?: FileSystemFileHandle
   size: number
   format: string
   lastModified: number

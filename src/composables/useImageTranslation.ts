@@ -374,20 +374,24 @@ export function useImageTranslation(options: UseImageTranslationOptions = {}) {
     try {
       const savedResult = await options.loadSavedResult(item)
       if (!savedResult || sequence !== restoreSequence || currentItemId !== item.id) return
-      cacheResult(savedResult)
-      result.value = savedResult
-      syncOverlayVisibility(savedResult)
-      statusVisible.value = false
-      progress.value = {
-        phase: 'complete',
-        message: `${savedResult.regions.length}개 영역의 저장된 번역 결과`,
-        completed: savedResult.regions.length,
-        total: savedResult.regions.length,
-      }
-      showNotice('원본 폴더에 저장된 번역 결과를 불러왔습니다.')
+      applySavedResult(savedResult)
     } catch {
       // 손상되었거나 읽을 수 없는 sidecar는 번역 기능 자체를 막지 않습니다.
     }
+  }
+
+  function applySavedResult(savedResult: ImageTranslationResult): void {
+    cacheResult(savedResult)
+    result.value = savedResult
+    syncOverlayVisibility(savedResult)
+    statusVisible.value = false
+    progress.value = {
+      phase: 'complete',
+      message: `${savedResult.regions.length}개 영역의 저장된 번역 결과`,
+      completed: savedResult.regions.length,
+      total: savedResult.regions.length,
+    }
+    showNotice('원본 폴더에 저장된 번역 결과를 불러왔습니다.')
   }
 
   function selectItem(item: MediaItem | undefined): void {
@@ -445,14 +449,6 @@ export function useImageTranslation(options: UseImageTranslationOptions = {}) {
     cancel()
     dismissNotice()
     currentItemId = item.id
-    if (!isChromeTranslatorSupported()) {
-      statusVisible.value = true
-      progress.value = {
-        phase: 'error',
-        message: '이미지 번역에는 Chrome 138 이상 데스크톱 버전의 내장 번역 기능이 필요합니다.',
-      }
-      return
-    }
 
     const sequence = ++startSequence
     statusVisible.value = true
@@ -470,6 +466,29 @@ export function useImageTranslation(options: UseImageTranslationOptions = {}) {
       persistResult = false
     }
     if (sequence !== startSequence || currentItemId !== item.id) return
+
+    if (result.value?.itemId !== item.id && options.loadSavedResult) {
+      try {
+        const savedResult = await options.loadSavedResult(item)
+        if (sequence !== startSequence || currentItemId !== item.id) return
+        if (savedResult) {
+          applySavedResult(savedResult)
+          return
+        }
+      } catch {
+        // 기존 결과 조회 실패는 새 번역을 막지 않습니다.
+      }
+    }
+
+    if (!isChromeTranslatorSupported()) {
+      statusVisible.value = true
+      progress.value = {
+        phase: 'error',
+        message: '이미지 번역에는 Chrome 138 이상 데스크톱 버전의 내장 번역 기능이 필요합니다.',
+      }
+      return
+    }
+
     startAnalysis(item, persistResult)
   }
 
