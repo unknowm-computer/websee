@@ -356,7 +356,6 @@ onMounted(async () => {
       <span>{{ item.format }}</span>
       <span>{{ content?.encoding ?? "인코딩 확인 중" }}</span>
       <div class="text-viewer__status">
-        <span v-if="dirty">수정됨</span>
         <span v-if="saveMessage" class="text-viewer__save-message">{{
           saveMessage
         }}</span>
@@ -370,6 +369,7 @@ onMounted(async () => {
           "
           >저장 시 UTF-8로 변환됩니다.</span
         >
+        <span v-if="dirty">수정됨</span>
       </div>
     </footer>
   </section>
@@ -427,6 +427,10 @@ onMounted(async () => {
     &:active:not(:disabled) {
       border-color: var(--color-shadow-dark) var(--color-light)
         var(--color-light) var(--color-shadow-dark);
+    }
+
+    &:disabled {
+      color: var(--color-disabled);
     }
   }
 
