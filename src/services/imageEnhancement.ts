@@ -7,6 +7,76 @@ export interface ImageEnhancementRenderer {
   render: (image: HTMLImageElement) => ImageEnhancementRenderResult
 }
 
+function skipGifSubBlocks(bytes: Uint8Array, startOffset: number): number {
+  let offset = startOffset
+
+  while (offset < bytes.length) {
+    const blockSize = bytes[offset]
+    offset += 1
+    if (blockSize === 0) return offset
+    if (offset + blockSize > bytes.length) throw new Error('GIF data block is truncated.')
+    offset += blockSize
+  }
+
+  throw new Error('GIF data block terminator is missing.')
+}
+
+export function isAnimatedGif(data: ArrayBuffer | Uint8Array): boolean {
+  const bytes = data instanceof Uint8Array ? data : new Uint8Array(data)
+  if (bytes.length < 13) throw new Error('GIF header is truncated.')
+
+  const signature = String.fromCharCode(...bytes.subarray(0, 6))
+  if (signature !== 'GIF87a' && signature !== 'GIF89a') {
+    throw new Error('GIF signature is invalid.')
+  }
+
+  const globalColorTablePacked = bytes[10]
+  const globalColorTableSize = globalColorTablePacked & 0x80
+    ? 3 * 2 ** ((globalColorTablePacked & 0x07) + 1)
+    : 0
+  let offset = 13 + globalColorTableSize
+  let frameCount = 0
+
+  if (offset > bytes.length) throw new Error('GIF global color table is truncated.')
+
+  while (offset < bytes.length) {
+    const marker = bytes[offset]
+    offset += 1
+
+    if (marker === 0x3b) return false
+    if (marker === 0x00) continue
+
+    if (marker === 0x21) {
+      if (offset >= bytes.length) throw new Error('GIF extension label is missing.')
+      offset += 1
+      offset = skipGifSubBlocks(bytes, offset)
+      continue
+    }
+
+    if (marker !== 0x2c) throw new Error('GIF block marker is invalid.')
+    if (offset + 9 > bytes.length) throw new Error('GIF image descriptor is truncated.')
+
+    const localColorTablePacked = bytes[offset + 8]
+    const localColorTableSize = localColorTablePacked & 0x80
+      ? 3 * 2 ** ((localColorTablePacked & 0x07) + 1)
+      : 0
+    offset += 9 + localColorTableSize
+    if (offset >= bytes.length) throw new Error('GIF image data is truncated.')
+
+    frameCount += 1
+    if (frameCount > 1) return true
+
+    offset += 1
+    offset = skipGifSubBlocks(bytes, offset)
+  }
+
+  throw new Error('GIF trailer is missing.')
+}
+
+export function supportsImageEnhancement(format: string, animatedGif: boolean): boolean {
+  return format.toUpperCase() !== 'GIF' || !animatedGif
+}
+
 const VERTEX_SHADER_SOURCE = `
   attribute vec2 a_position;
   attribute vec2 a_texCoord;

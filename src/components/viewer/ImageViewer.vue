@@ -16,6 +16,8 @@ import ImageTranslationToast from "@/components/viewer/ImageTranslationToast.vue
 import { useImageTranslation } from "@/composables/useImageTranslation";
 import {
   createImageEnhancementRenderer,
+  isAnimatedGif,
+  supportsImageEnhancement,
   type ImageEnhancementRenderer,
 } from "@/services/imageEnhancement";
 import type { ImageTranslationResult } from "@/types/imageTranslation";
@@ -92,6 +94,9 @@ const imageEnhancementEnabled = ref(
   readViewerEnhancementPreference(localStorage),
 );
 const imageEnhancementMode = ref<"original" | "webgl" | "css">("original");
+const gifAnimationState = ref<
+  "not-gif" | "checking" | "static" | "animated" | "unavailable"
+>("not-gif");
 const imageFailed = ref(false);
 const initialImageReady = ref(false);
 const slideshowActive = ref(
@@ -130,6 +135,7 @@ let dragOriginX = 0;
 let dragOriginY = 0;
 let imageEnhancementRenderer: ImageEnhancementRenderer | undefined;
 let imageEnhancementRequest = 0;
+let gifAnimationRequest = 0;
 let translationLongPressTimer: number | undefined;
 let suppressTranslationClick = false;
 
@@ -140,6 +146,18 @@ const currentIndex = computed(() =>
   ),
 );
 const currentItem = computed(() => props.items[currentIndex.value]);
+const currentItemIsGif = computed(
+  () => currentItem.value?.format.toUpperCase() === "GIF",
+);
+const imageEnhancementSupported = computed(() => {
+  if (!currentItem.value) return false;
+  if (!currentItemIsGif.value) return true;
+  if (gifAnimationState.value !== "static") return false;
+  return supportsImageEnhancement(currentItem.value.format, false);
+});
+const imageEnhancementActive = computed(
+  () => imageEnhancementEnabled.value && imageEnhancementSupported.value,
+);
 const canMovePrevious = computed(() => currentIndex.value > 0);
 const canMoveNext = computed(() => currentIndex.value < props.items.length - 1);
 const isRotatedSideways = computed(() => Math.abs(rotation.value % 180) === 90);
@@ -188,9 +206,15 @@ const translationButtonLabel = computed(() => {
   if (!hasTranslationResult.value) return "번역";
   return "다시 번역";
 });
-const imageEnhancementButtonLabel = computed(() =>
-  imageEnhancementEnabled.value ? "화질 개선 끄기" : "화질 개선 켜기",
-);
+const imageEnhancementButtonLabel = computed(() => {
+  if (gifAnimationState.value === "checking")
+    return "GIF 애니메이션 확인 중";
+  if (gifAnimationState.value === "animated")
+    return "움직이는 GIF에서는 화질 개선을 적용하지 않습니다";
+  if (gifAnimationState.value === "unavailable")
+    return "GIF 애니메이션을 확인할 수 없어 화질 개선을 적용하지 않습니다";
+  return imageEnhancementEnabled.value ? "화질 개선 끄기" : "화질 개선 켜기";
+});
 
 function clearTranslationLongPressTimer(): void {
   if (translationLongPressTimer !== undefined) {
@@ -420,6 +444,33 @@ function disposeImageEnhancementRenderer(): void {
   imageEnhancementRenderer = undefined;
 }
 
+async function updateGifAnimationState(item?: MediaItem): Promise<void> {
+  const requestId = ++gifAnimationRequest;
+  if (!item || item.format.toUpperCase() !== "GIF") {
+    gifAnimationState.value = "not-gif";
+    return;
+  }
+
+  gifAnimationState.value = "checking";
+  try {
+    const animated = isAnimatedGif(await item.file.arrayBuffer());
+    if (requestId !== gifAnimationRequest || currentItem.value?.id !== item.id)
+      return;
+
+    gifAnimationState.value = animated ? "animated" : "static";
+    if (!animated && imageEnhancementEnabled.value) {
+      const image = imageElement.value;
+      if (image?.complete && image.naturalWidth) {
+        void renderImageEnhancement(image, item.id);
+      }
+    }
+  } catch {
+    if (requestId !== gifAnimationRequest || currentItem.value?.id !== item.id)
+      return;
+    gifAnimationState.value = "unavailable";
+  }
+}
+
 function waitForAnimationFrame(): Promise<void> {
   return new Promise((resolve) =>
     window.requestAnimationFrame(() => resolve()),
@@ -437,7 +488,7 @@ async function renderImageEnhancement(
 
   if (
     requestId !== imageEnhancementRequest ||
-    !imageEnhancementEnabled.value ||
+    !imageEnhancementActive.value ||
     currentItem.value?.id !== itemId ||
     imageElement.value !== image
   )
@@ -455,7 +506,7 @@ async function renderImageEnhancement(
   const result = imageEnhancementRenderer.render(image);
   if (
     requestId !== imageEnhancementRequest ||
-    !imageEnhancementEnabled.value ||
+    !imageEnhancementActive.value ||
     currentItem.value?.id !== itemId
   )
     return;
@@ -472,6 +523,8 @@ async function renderImageEnhancement(
 }
 
 function toggleImageEnhancement(): void {
+  if (!imageEnhancementSupported.value) return;
+
   imageEnhancementEnabled.value = !imageEnhancementEnabled.value;
   writeViewerEnhancementPreference(localStorage, imageEnhancementEnabled.value);
   imageEnhancementRequest += 1;
@@ -492,7 +545,7 @@ function toggleImageEnhancement(): void {
 function handleEnhancementContextLost(): void {
   imageEnhancementRequest += 1;
   imageEnhancementRenderer = undefined;
-  imageEnhancementMode.value = imageEnhancementEnabled.value
+  imageEnhancementMode.value = imageEnhancementActive.value
     ? "css"
     : "original";
 }
@@ -502,7 +555,7 @@ function handleEnhancementContextRestored(): void {
   const image = imageElement.value;
   const item = currentItem.value;
   if (
-    imageEnhancementEnabled.value &&
+    imageEnhancementActive.value &&
     image?.complete &&
     image.naturalWidth &&
     item
@@ -525,7 +578,7 @@ function handleImageLoad(event: Event): void {
     image.naturalHeight,
   );
   applyZoomMode(true);
-  if (imageEnhancementEnabled.value) {
+  if (imageEnhancementActive.value) {
     void renderImageEnhancement(image, loadedItemId);
   }
   if (!initialImageReady.value) void revealInitialImage(loadedItemId);
@@ -634,7 +687,9 @@ function handleKeydown(event: KeyboardEvent): void {
   const rotateShortcut = event.code === "KeyR";
   const fullscreenShortcut = event.code === "KeyF";
   const canToggleImageEnhancement =
-    Boolean(currentItem.value) && !imageFailed.value;
+    Boolean(currentItem.value) &&
+    imageEnhancementSupported.value &&
+    !imageFailed.value;
   const canToggleTranslationOverlay =
     props.translationEnabled &&
     Boolean(translationResult.value?.regions.length);
@@ -729,12 +784,14 @@ watch(
     panX.value = 0;
     panY.value = 0;
     imageFailed.value = false;
+    void updateGifAnimationState(currentItem.value);
     await nextTick();
     applyZoomMode(true);
   },
 );
 
 selectTranslationItem(currentItem.value);
+void updateGifAnimationState(currentItem.value);
 
 onMounted(() => {
   window.addEventListener("keydown", handleKeydown, { capture: true });
@@ -753,6 +810,7 @@ onBeforeUnmount(() => {
   clearTranslationLongPressTimer();
   stopSlideshowTimer();
   imageEnhancementRequest += 1;
+  gifAnimationRequest += 1;
   disposeImageEnhancementRenderer();
   resizeObserver?.disconnect();
   window.removeEventListener("keydown", handleKeydown, { capture: true });
@@ -847,13 +905,13 @@ onBeforeUnmount(() => {
         type="button"
         :title="`${imageEnhancementButtonLabel} (E)`"
         :aria-label="imageEnhancementButtonLabel"
-        :aria-pressed="imageEnhancementEnabled"
-        :class="{ 'is-pressed': imageEnhancementEnabled }"
-        :disabled="!currentItem || imageFailed"
+        :aria-pressed="imageEnhancementActive"
+        :class="{ 'is-pressed': imageEnhancementActive }"
+        :disabled="!currentItem || imageFailed || !imageEnhancementSupported"
         @click="toggleImageEnhancement"
       >
         <SvgIcon
-          :name="imageEnhancementEnabled ? 'blur-on' : 'blur-off'"
+          :name="imageEnhancementActive ? 'blur-on' : 'blur-off'"
           :size="20"
         />
         <span class="image-viewer__button-label">화질 개선</span>
@@ -990,7 +1048,7 @@ onBeforeUnmount(() => {
           :class="{
             'is-webgl-source': imageEnhancementMode === 'webgl',
             'is-css-enhanced':
-              imageEnhancementEnabled && imageEnhancementMode === 'css',
+              imageEnhancementActive && imageEnhancementMode === 'css',
           }"
           draggable="false"
           @load="handleImageLoad"
