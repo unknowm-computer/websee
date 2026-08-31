@@ -2,10 +2,16 @@
 import { basicSetup } from 'codemirror'
 import { html } from '@codemirror/lang-html'
 import { json } from '@codemirror/lang-json'
+import { searchPanelOpen } from '@codemirror/search'
 import { EditorState, type Extension } from '@codemirror/state'
-import { EditorView } from '@codemirror/view'
+import { EditorView, type ViewUpdate } from '@codemirror/view'
 import { nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 
+import {
+  getTextEditorReplacementStatus,
+  getTextEditorSearchStatus,
+  type TextEditorActivityStatus,
+} from '@/services/textEditorStatus'
 import { CODEMIRROR_CSP_NONCE } from '@/utils/contentSecurityPolicy'
 
 interface Props {
@@ -16,11 +22,13 @@ interface Props {
 const props = defineProps<Props>()
 
 const emit = defineEmits<{
+  (event: 'activity-status', status?: TextEditorActivityStatus): void
   (event: 'update:modelValue', value: string): void
 }>()
 
 const editorContainer = ref<HTMLElement>()
 let editorView: EditorView | undefined
+let searchStatusTimer: number | undefined
 
 const KOREAN_EDITOR_PHRASES = {
   'Find': '찾기',
@@ -38,12 +46,43 @@ const KOREAN_EDITOR_PHRASES = {
   'on line': '줄',
   'replaced match on line $': '$번째 줄의 일치 항목을 바꿨습니다',
   'replaced $ matches': '일치 항목 $개를 바꿨습니다',
+  'Selection deleted': '선택 영역을 삭제했습니다',
 } satisfies Record<string, string>
 
 function getLanguageExtension(format: string): Extension[] {
   if (format === 'JSON') return [json()]
   if (format === 'SMI') return [html()]
   return []
+}
+
+function clearSearchStatusTimer(): void {
+  if (searchStatusTimer !== undefined) window.clearTimeout(searchStatusTimer)
+  searchStatusTimer = undefined
+}
+
+function scheduleSearchStatus(): void {
+  clearSearchStatusTimer()
+  searchStatusTimer = window.setTimeout(() => {
+    searchStatusTimer = undefined
+    const state = editorView?.state
+    if (!state || !searchPanelOpen(state)) {
+      emit('activity-status')
+      return
+    }
+    emit('activity-status', getTextEditorSearchStatus(state))
+  }, 80)
+}
+
+function updateActivityStatus(update: ViewUpdate): void {
+  const replacementStatus = getTextEditorReplacementStatus(update.transactions)
+  if (replacementStatus) {
+    clearSearchStatusTimer()
+    emit('activity-status', replacementStatus)
+    return
+  }
+
+  if (!update.transactions.length) return
+  scheduleSearchStatus()
 }
 
 onMounted(async () => {
@@ -62,6 +101,7 @@ onMounted(async () => {
         EditorView.contentAttributes.of({ 'aria-label': '텍스트 편집기' }),
         EditorView.updateListener.of((update) => {
           if (update.docChanged) emit('update:modelValue', update.state.doc.toString())
+          updateActivityStatus(update)
         }),
         ...getLanguageExtension(props.format),
       ],
@@ -82,7 +122,10 @@ watch(
   },
 )
 
-onBeforeUnmount(() => editorView?.destroy())
+onBeforeUnmount(() => {
+  clearSearchStatusTimer()
+  editorView?.destroy()
+})
 </script>
 
 <template>
@@ -115,6 +158,11 @@ onBeforeUnmount(() => editorView?.destroy())
     height: 100%;
     overflow: auto;
     overflow-anchor: none;
+  }
+
+  .cm-announced {
+    position: fixed;
+    top: -10000px;
   }
 
   .cm-content {
@@ -349,6 +397,12 @@ onBeforeUnmount(() => editorView?.destroy())
   .cm-focused {
     outline: 1px solid var(--color-selection);
     outline-offset: -1px;
+  }
+}
+
+@media print {
+  .text-editor .cm-announced {
+    display: none;
   }
 }
 

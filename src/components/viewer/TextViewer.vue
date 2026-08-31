@@ -6,203 +6,252 @@ import {
   onMounted,
   ref,
   watch,
-} from 'vue'
+} from "vue";
 
-import SvgIcon from '@/components/common/SvgIcon.vue'
+import SvgIcon from "@/components/common/SvgIcon.vue";
+import type { TextEditorActivityStatus } from "@/services/textEditorStatus";
 import {
   readTextFile,
   requestTextFileWritePermission,
   TEXT_VIEWER_MAX_BYTES,
   writeTextFile,
   type TextFileContent,
-} from '@/services/textFile'
-import type { MediaItem } from '@/types/media'
-import { formatBytes, getExtension } from '@/utils/media'
+} from "@/services/textFile";
+import type { MediaItem } from "@/types/media";
+import { formatBytes, getExtension } from "@/utils/media";
 
-const TextEditor = defineAsyncComponent(() => import('@/components/viewer/TextEditor.vue'))
+const TextEditor = defineAsyncComponent(
+  () => import("@/components/viewer/TextEditor.vue"),
+);
 
 interface Props {
-  item: MediaItem
+  item: MediaItem;
 }
 
-const props = defineProps<Props>()
+const props = defineProps<Props>();
 
 const emit = defineEmits<{
-  (event: 'close'): void
-  (event: 'saved', itemId: string, file: File): void
-}>()
+  (event: "close"): void;
+  (event: "saved", itemId: string, file: File): void;
+}>();
 
-const root = ref<HTMLElement>()
-const contentElement = ref<HTMLElement>()
-const content = ref<TextFileContent>()
-const editedText = ref('')
-const savedText = ref('')
-const errorMessage = ref('')
-const saveMessage = ref('')
-const loading = ref(false)
-const editing = ref(false)
-const saving = ref(false)
-let requestId = 0
+const root = ref<HTMLElement>();
+const contentElement = ref<HTMLElement>();
+const content = ref<TextFileContent>();
+const editedText = ref("");
+const savedText = ref("");
+const errorMessage = ref("");
+const saveMessage = ref("");
+const loading = ref(false);
+const editing = ref(false);
+const saving = ref(false);
+const editorActivityStatus = ref<TextEditorActivityStatus>();
+let requestId = 0;
 
-const ARROW_SCROLL_STEP = 26
+const ARROW_SCROLL_STEP = 26;
 
-const canEdit = computed(() => Boolean(content.value && !content.value.truncated))
-const hasOriginalFileHandle = computed(() =>
-  props.item.kind === 'text' && props.item.fileHandle !== undefined,
-)
-const dirty = computed(() => editing.value && editedText.value !== savedText.value)
-const editorFormat = computed(() => getExtension(props.item.name).toUpperCase())
+const canEdit = computed(() =>
+  Boolean(content.value && !content.value.truncated),
+);
+const hasOriginalFileHandle = computed(
+  () => props.item.kind === "text" && props.item.fileHandle !== undefined,
+);
+const dirty = computed(
+  () => editing.value && editedText.value !== savedText.value,
+);
+const editorFormat = computed(() =>
+  getExtension(props.item.name).toUpperCase(),
+);
+const editorActivityText = computed(() => {
+  const status = editorActivityStatus.value;
+  if (!status) return "";
+  if (status.kind === "replace") return `${status.count}개 변경됨`;
+  if (!status.total) return "찾기 결과 없음";
+  return `찾기 ${status.current} / ${status.total}`;
+});
 
 function focusViewer(): void {
-  void nextTick(() => root.value?.focus())
+  void nextTick(() => root.value?.focus());
+}
+
+function updateEditedText(value: string): void {
+  editedText.value = value;
+  if (value !== savedText.value) saveMessage.value = "";
+}
+
+function updateEditorActivityStatus(status?: TextEditorActivityStatus): void {
+  editorActivityStatus.value = status;
+  if (status) saveMessage.value = "";
 }
 
 function confirmDiscardChanges(): boolean {
-  return !dirty.value || window.confirm('저장하지 않은 변경사항을 버릴까요?')
+  return !dirty.value || window.confirm("저장하지 않은 변경사항을 버릴까요?");
 }
 
 function requestClose(): void {
-  if (confirmDiscardChanges()) emit('close')
+  if (confirmDiscardChanges()) emit("close");
 }
 
 function handleKeydown(event: KeyboardEvent): void {
   if (editing.value) {
-    if (event.key === 'Enter' || event.key === 'Escape') {
-      event.stopPropagation()
+    if (event.key === "Enter" || event.key === "Escape") {
+      event.stopPropagation();
     }
-    if ((event.metaKey || event.ctrlKey) && event.code === 'KeyS') {
-      event.preventDefault()
-      if (hasOriginalFileHandle.value) void saveOriginal()
-      else void saveAs()
+    if ((event.metaKey || event.ctrlKey) && event.code === "KeyS") {
+      event.preventDefault();
+      if (hasOriginalFileHandle.value) void saveOriginal();
+      else void saveAs();
     }
-    return
+    return;
   }
 
-  if (event.key === 'Enter' || event.key === 'Escape') {
-    event.preventDefault()
-    event.stopPropagation()
-    requestClose()
-    return
+  if (event.key === "Enter" || event.key === "Escape") {
+    event.preventDefault();
+    event.stopPropagation();
+    requestClose();
+    return;
   }
-  if (!['ArrowLeft', 'ArrowUp', 'ArrowRight', 'ArrowDown'].includes(event.key)) return
+  if (!["ArrowLeft", "ArrowUp", "ArrowRight", "ArrowDown"].includes(event.key))
+    return;
 
-  event.preventDefault()
-  const direction = event.key === 'ArrowLeft' || event.key === 'ArrowUp' ? -1 : 1
+  event.preventDefault();
+  const direction =
+    event.key === "ArrowLeft" || event.key === "ArrowUp" ? -1 : 1;
   contentElement.value?.scrollBy({
     top: direction * ARROW_SCROLL_STEP,
-    behavior: 'auto',
-  })
+    behavior: "auto",
+  });
 }
 
 async function loadContent(item: MediaItem): Promise<void> {
-  const currentRequestId = ++requestId
-  content.value = undefined
-  editedText.value = ''
-  savedText.value = ''
-  errorMessage.value = ''
-  saveMessage.value = ''
-  editing.value = false
-  loading.value = true
+  const currentRequestId = ++requestId;
+  content.value = undefined;
+  editedText.value = "";
+  savedText.value = "";
+  errorMessage.value = "";
+  saveMessage.value = "";
+  editorActivityStatus.value = undefined;
+  editing.value = false;
+  loading.value = true;
 
   try {
-    const nextContent = await readTextFile(item.file, TEXT_VIEWER_MAX_BYTES)
-    if (currentRequestId !== requestId) return
-    content.value = nextContent
-    editedText.value = nextContent.text
-    savedText.value = nextContent.text
+    const nextContent = await readTextFile(item.file, TEXT_VIEWER_MAX_BYTES);
+    if (currentRequestId !== requestId) return;
+    content.value = nextContent;
+    editedText.value = nextContent.text;
+    savedText.value = nextContent.text;
   } catch {
     if (currentRequestId === requestId) {
-      errorMessage.value = '텍스트 파일을 읽지 못했습니다.'
+      errorMessage.value = "텍스트 파일을 읽지 못했습니다.";
     }
   } finally {
-    if (currentRequestId === requestId) loading.value = false
+    if (currentRequestId === requestId) loading.value = false;
   }
 }
 
 function startEditing(): void {
-  if (!canEdit.value) return
-  saveMessage.value = ''
-  editedText.value = savedText.value
-  editing.value = true
+  if (!canEdit.value) return;
+  saveMessage.value = "";
+  editedText.value = savedText.value;
+  editorActivityStatus.value = undefined;
+  editing.value = true;
 }
 
 function cancelEditing(): void {
-  if (!confirmDiscardChanges()) return
-  editedText.value = savedText.value
-  editing.value = false
-  saveMessage.value = ''
-  focusViewer()
+  if (!confirmDiscardChanges()) return;
+  editedText.value = savedText.value;
+  editorActivityStatus.value = undefined;
+  editing.value = false;
+  saveMessage.value = "";
+  focusViewer();
 }
 
-function updateSavedContent(text: string, encoding: TextFileContent['encoding']): void {
-  savedText.value = text
-  editedText.value = text
+function updateSavedContent(
+  text: string,
+  encoding: TextFileContent["encoding"],
+): void {
+  savedText.value = text;
+  editedText.value = text;
   if (content.value) {
     content.value = {
       ...content.value,
       encoding,
       text,
       truncated: false,
-    }
+    };
   }
 }
 
 async function saveOriginal(): Promise<void> {
-  const fileHandle = props.item.fileHandle
-  const sourceEncoding = content.value?.encoding
-  if (!fileHandle || !sourceEncoding || saving.value) return
+  const fileHandle = props.item.fileHandle;
+  const sourceEncoding = content.value?.encoding;
+  if (!fileHandle || !sourceEncoding || saving.value) return;
 
-  saving.value = true
-  saveMessage.value = ''
+  saving.value = true;
+  saveMessage.value = "";
   try {
-    if (!await requestTextFileWritePermission(fileHandle)) {
-      saveMessage.value = '원본 쓰기 권한이 없습니다. 다른 이름으로 저장해주세요.'
-      return
+    if (!(await requestTextFileWritePermission(fileHandle))) {
+      saveMessage.value =
+        "원본 쓰기 권한이 없습니다. 다른 이름으로 저장해주세요.";
+      return;
     }
 
-    const result = await writeTextFile(fileHandle, editedText.value, sourceEncoding)
-    updateSavedContent(editedText.value, result.encoding)
-    emit('saved', props.item.id, result.file)
-    saveMessage.value = result.encoding === sourceEncoding
-      ? '원본 파일에 저장했습니다.'
-      : `${result.encoding} 형식으로 원본 파일에 저장했습니다.`
+    const result = await writeTextFile(
+      fileHandle,
+      editedText.value,
+      sourceEncoding,
+    );
+    updateSavedContent(editedText.value, result.encoding);
+    emit("saved", props.item.id, result.file);
+    saveMessage.value =
+      result.encoding === sourceEncoding
+        ? "원본 파일에 저장했습니다."
+        : `${result.encoding} 형식으로 원본 파일에 저장했습니다.`;
   } catch {
-    saveMessage.value = '원본 파일에 저장하지 못했습니다.'
+    saveMessage.value = "원본 파일에 저장하지 못했습니다.";
   } finally {
-    saving.value = false
+    saving.value = false;
   }
 }
 
 async function saveAs(): Promise<void> {
-  const sourceEncoding = content.value?.encoding
-  const showSaveFilePicker = window.showSaveFilePicker
+  const sourceEncoding = content.value?.encoding;
+  const showSaveFilePicker = window.showSaveFilePicker;
   if (!sourceEncoding || !showSaveFilePicker || saving.value) {
-    if (!showSaveFilePicker) saveMessage.value = '이 Chrome에서는 다른 이름으로 저장할 수 없습니다.'
-    return
+    if (!showSaveFilePicker)
+      saveMessage.value = "이 Chrome에서는 다른 이름으로 저장할 수 없습니다.";
+    return;
   }
 
-  saving.value = true
-  saveMessage.value = ''
+  saving.value = true;
+  saveMessage.value = "";
   try {
-    const extension = getExtension(props.item.name)
+    const extension = getExtension(props.item.name);
     const fileHandle = await showSaveFilePicker({
       suggestedName: props.item.name,
-      types: [{
-        description: '텍스트 파일',
-        accept: { 'text/plain': extension ? [`.${extension}`] : ['.txt'] },
-      }],
-    })
-    const result = await writeTextFile(fileHandle, editedText.value, sourceEncoding)
-    savedText.value = editedText.value
-    saveMessage.value = result.encoding === sourceEncoding
-      ? '새 파일로 저장했습니다.'
-      : `${result.encoding} 형식의 새 파일로 저장했습니다.`
+      types: [
+        {
+          description: "텍스트 파일",
+          accept: { "text/plain": extension ? [`.${extension}`] : [".txt"] },
+        },
+      ],
+    });
+    const result = await writeTextFile(
+      fileHandle,
+      editedText.value,
+      sourceEncoding,
+    );
+    savedText.value = editedText.value;
+    saveMessage.value =
+      result.encoding === sourceEncoding
+        ? "새 파일로 저장했습니다."
+        : `${result.encoding} 형식의 새 파일로 저장했습니다.`;
   } catch (error) {
-    if (!(error instanceof DOMException && error.name === 'AbortError')) {
-      saveMessage.value = '새 파일로 저장하지 못했습니다.'
+    if (!(error instanceof DOMException && error.name === "AbortError")) {
+      saveMessage.value = "새 파일로 저장하지 못했습니다.";
     }
   } finally {
-    saving.value = false
+    saving.value = false;
   }
 }
 
@@ -210,12 +259,12 @@ watch(
   () => props.item.id,
   () => void loadContent(props.item),
   { immediate: true },
-)
+);
 
 onMounted(async () => {
-  await nextTick()
-  root.value?.focus()
-})
+  await nextTick();
+  root.value?.focus();
+});
 </script>
 
 <template>
@@ -264,12 +313,20 @@ onMounted(async () => {
           type="button"
           aria-label="편집"
           :disabled="!canEdit"
-          :title="content?.truncated ? '일부만 읽은 파일은 편집할 수 없습니다.' : '편집'"
+          :title="
+            content?.truncated
+              ? '일부만 읽은 파일은 편집할 수 없습니다.'
+              : '편집'
+          "
           @click="startEditing"
         >
           <SvgIcon name="edit" :size="18" />
         </button>
-        <button type="button" aria-label="텍스트 상세보기 닫기" @click="requestClose">
+        <button
+          type="button"
+          aria-label="텍스트 상세보기 닫기"
+          @click="requestClose"
+        >
           <SvgIcon name="close" :size="18" />
         </button>
       </div>
@@ -285,19 +342,35 @@ onMounted(async () => {
     </div>
     <TextEditor
       v-else-if="editing"
-      v-model="editedText"
+      :model-value="editedText"
       :format="editorFormat"
+      @activity-status="updateEditorActivityStatus"
+      @update:model-value="updateEditedText"
     />
-    <pre v-else ref="contentElement" class="text-viewer__content">{{ content?.text }}</pre>
+    <pre v-else ref="contentElement" class="text-viewer__content">{{
+      content?.text
+    }}</pre>
 
     <footer>
       <span>{{ formatBytes(item.size) }}</span>
       <span>{{ item.format }}</span>
-      <span>{{ content?.encoding ?? '인코딩 확인 중' }}</span>
-      <span v-if="dirty">수정됨</span>
-      <span v-else-if="saveMessage" class="text-viewer__save-message">{{ saveMessage }}</span>
-      <span v-else-if="content?.truncated">파일이 커서 앞부분 5 MB만 표시합니다.</span>
-      <span v-else-if="editing && content?.encoding === 'CP949'">저장 시 UTF-8로 변환됩니다.</span>
+      <span>{{ content?.encoding ?? "인코딩 확인 중" }}</span>
+      <div class="text-viewer__status">
+        <span v-if="dirty">수정됨</span>
+        <span v-if="saveMessage" class="text-viewer__save-message">{{
+          saveMessage
+        }}</span>
+        <span v-else-if="editorActivityText">{{ editorActivityText }}</span>
+        <span v-else-if="!dirty && content?.truncated"
+          >파일이 커서 앞부분 5 MB만 표시합니다.</span
+        >
+        <span
+          v-else-if="
+            !dirty && editing && content?.encoding === 'CP949'
+          "
+          >저장 시 UTF-8로 변환됩니다.</span
+        >
+      </div>
     </footer>
   </section>
 </template>
@@ -348,12 +421,12 @@ onMounted(async () => {
     place-items: center;
     background: var(--color-face);
     border: 1px solid;
-    border-color: var(--color-light) var(--color-shadow-dark) var(--color-shadow-dark)
-      var(--color-light);
+    border-color: var(--color-light) var(--color-shadow-dark)
+      var(--color-shadow-dark) var(--color-light);
 
     &:active:not(:disabled) {
-      border-color: var(--color-shadow-dark) var(--color-light) var(--color-light)
-        var(--color-shadow-dark);
+      border-color: var(--color-shadow-dark) var(--color-light)
+        var(--color-light) var(--color-shadow-dark);
     }
   }
 
@@ -363,7 +436,11 @@ onMounted(async () => {
     padding: 20px 24px;
     margin: 0;
     overflow: auto;
-    font: 16px/1.6 ui-monospace, SFMono-Regular, Consolas, monospace;
+    font:
+      16px/1.6 ui-monospace,
+      SFMono-Regular,
+      Consolas,
+      monospace;
     white-space: pre-wrap;
     overflow-wrap: anywhere;
     tab-size: 4;
@@ -390,17 +467,41 @@ onMounted(async () => {
     padding: 2px;
     border-top: 1px solid var(--color-light);
 
-    span {
+    > span {
       min-width: 90px;
       padding: 3px 7px;
       overflow: hidden;
       text-overflow: ellipsis;
       white-space: nowrap;
       border: 1px solid;
-      border-color: var(--color-shadow) var(--color-light) var(--color-light) var(--color-shadow);
+      border-color: var(--color-shadow) var(--color-light) var(--color-light)
+        var(--color-shadow);
+    }
+  }
 
-      &:last-child {
-        flex: 1;
+  &__status {
+    display: flex;
+    flex: 1;
+    gap: 6px;
+    justify-content: flex-end;
+    min-width: 0;
+    padding: 3px 7px;
+    overflow: hidden;
+    text-align: right;
+    white-space: nowrap;
+    border: 1px solid;
+    border-color: var(--color-shadow) var(--color-light) var(--color-light)
+      var(--color-shadow);
+
+    > span {
+      min-width: 0;
+      overflow: hidden;
+      text-overflow: ellipsis;
+
+      + span::before {
+        margin-right: 6px;
+        color: var(--color-muted);
+        content: "·";
       }
     }
   }
