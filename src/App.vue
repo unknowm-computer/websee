@@ -1573,7 +1573,11 @@ function handleBrowserKeydown(event: KeyboardEvent): void {
 
   const target = event.target
   if (target instanceof HTMLInputElement || target instanceof HTMLSelectElement) return
-  if (target instanceof Element && target.closest('.folder-tree')) return
+  if (
+    event.key !== 'Backspace'
+    && target instanceof Element
+    && target.closest('.folder-tree')
+  ) return
 
   if (textViewerItem.value) {
     if (event.key === 'Enter' || event.key === 'Escape') {
@@ -1616,18 +1620,27 @@ function handleBrowserKeydown(event: KeyboardEvent): void {
     event.preventDefault()
     openViewer()
   }
-  if (event.key === 'Backspace' && archiveBrowsing.value) {
+  if (event.key === 'Backspace') {
     event.preventDefault()
-    if (selectedArchiveDirectory.value) {
-      const previousPath = selectedArchiveDirectory.value
-      const outerItemId = archiveOuterItemId.value
-      selectArchiveDirectory(
+    if (archiveBrowsing.value) {
+      if (selectedArchiveDirectory.value) {
+        const previousPath = selectedArchiveDirectory.value
+        const outerItemId = archiveOuterItemId.value
+        selectArchiveDirectory(
+          getDirectoryPath(previousPath),
+          outerItemId ? `archive-folder:${outerItemId}:${previousPath}` : undefined,
+        )
+      } else {
+        leaveArchiveBrowser()
+      }
+    } else if (selectedDirectory.value) {
+      const previousPath = selectedDirectory.value
+      void selectDirectory(
         getDirectoryPath(previousPath),
-        outerItemId ? `archive-folder:${outerItemId}:${previousPath}` : undefined,
+        `folder:${previousPath}`,
       )
-    } else {
-      leaveArchiveBrowser()
     }
+    return
   }
   if (
     viewMode.value === 'grid'

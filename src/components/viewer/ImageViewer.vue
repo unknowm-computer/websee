@@ -149,10 +149,13 @@ const currentItem = computed(() => props.items[currentIndex.value]);
 const currentItemIsGif = computed(
   () => currentItem.value?.format.toUpperCase() === "GIF",
 );
+const currentItemIsSvg = computed(
+  () => currentItem.value?.format.toUpperCase() === "SVG",
+);
 const imageEnhancementSupported = computed(() => {
   if (!currentItem.value) return false;
-  if (!currentItemIsGif.value) return true;
-  if (gifAnimationState.value !== "static") return false;
+  if (currentItemIsGif.value && gifAnimationState.value !== "static")
+    return false;
   return supportsImageEnhancement(currentItem.value.format, false);
 });
 const imageEnhancementActive = computed(
@@ -207,6 +210,8 @@ const translationButtonLabel = computed(() => {
   return "다시 번역";
 });
 const imageEnhancementButtonLabel = computed(() => {
+  if (currentItemIsSvg.value)
+    return "SVG에서는 화질 개선을 적용하지 않습니다";
   if (gifAnimationState.value === "checking")
     return "GIF 애니메이션 확인 중";
   if (gifAnimationState.value === "animated")

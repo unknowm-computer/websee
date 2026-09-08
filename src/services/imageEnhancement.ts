@@ -74,7 +74,9 @@ export function isAnimatedGif(data: ArrayBuffer | Uint8Array): boolean {
 }
 
 export function supportsImageEnhancement(format: string, animatedGif: boolean): boolean {
-  return format.toUpperCase() !== 'GIF' || !animatedGif
+  const normalizedFormat = format.toUpperCase()
+  if (normalizedFormat === 'SVG') return false
+  return normalizedFormat !== 'GIF' || !animatedGif
 }
 
 const VERTEX_SHADER_SOURCE = `

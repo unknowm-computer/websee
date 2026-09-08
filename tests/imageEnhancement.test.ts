@@ -59,9 +59,14 @@ describe('image enhancement format support', () => {
     expect(() => isAnimatedGif(new Uint8Array([0x47, 0x49]))).toThrow()
   })
 
-  it('skips only animated GIF images', () => {
+  it('skips animated GIF images', () => {
     expect(supportsImageEnhancement('GIF', true)).toBe(false)
     expect(supportsImageEnhancement('gif', false)).toBe(true)
+  })
+
+  it('skips SVG vector images', () => {
+    expect(supportsImageEnhancement('SVG', false)).toBe(false)
+    expect(supportsImageEnhancement('svg', false)).toBe(false)
   })
 
   it('keeps enhancement available for still image formats', () => {

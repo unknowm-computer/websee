@@ -48,7 +48,7 @@ const emit = defineEmits<{
           </div>
           <div>
             <dt><kbd>Backspace</kbd></dt>
-            <dd>압축파일 목록에서 상위 폴더로 돌아가기</dd>
+            <dd>폴더·압축파일 목록에서 상위 위치로 돌아가기</dd>
           </div>
           <div>
             <dt><kbd>←</kbd> <kbd>↑</kbd> / <kbd>→</kbd> <kbd>↓</kbd></dt>
@@ -107,7 +107,7 @@ const emit = defineEmits<{
           이미지 상세보기의 <strong>화질 개선</strong> 버튼은 원본을 수정하지
           않고 선과 글자를 조금 더 또렷하게 표시합니다. 일반 이미지는 GPU로
           처리하며, 크기가 너무 크거나 WebGL을 사용할 수 없으면 가벼운 대비
-          보정으로 자동 전환됩니다.
+          보정으로 자동 전환됩니다. 움직이는 GIF와 SVG에는 적용하지 않습니다.
         </p>
         <p>
           메인 툴바의 <strong>옵션</strong>에서 이미지 번역 기능을 켜면 이미지
