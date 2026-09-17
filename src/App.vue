@@ -735,7 +735,7 @@ function getCollectionRestoreState(): CollectionRestoreState {
 }
 
 async function refreshCollection(): Promise<void> {
-  if (!collection.value || !canRefreshCollection.value) return
+  if (loading.value || !collection.value || !canRefreshCollection.value) return
 
   const restore = getCollectionRestoreState()
   const handle = currentDirectoryHandle.value
@@ -995,6 +995,53 @@ function openFolderImage(item: MediaItem, slideshow: boolean): void {
   selectedItemId.value = item.id
   initialSlideshow.value = slideshow
   viewerOpen.value = true
+}
+
+async function refreshViewerImage(item: MediaItem): Promise<boolean> {
+  const activeCollection = collection.value
+  const index = archiveIndex.value
+  const navigationRequest = archiveExtractionRequest
+  try {
+    const directoryHandle = item.kind === 'image'
+      ? directoryHandleCache.get(item.directoryPath)
+      : undefined
+    const fileHandle = directoryHandle
+      ? await directoryHandle.getFileHandle(item.name)
+      : item.fileHandle
+    const sourceFile = item.kind === 'archive-entry' && index
+      ? await extractArchiveEntry(index, item)
+      : fileHandle ? await fileHandle.getFile() : item.file
+    // Read fresh bytes before displaying them; do not keep a file-backed snapshot
+    // that can become invalid when an external editor replaces the source file.
+    const file = new File([await sourceFile.arrayBuffer()], sourceFile.name, {
+      type: sourceFile.type,
+      lastModified: sourceFile.lastModified,
+    })
+    if (
+      !viewerOpen.value
+      || viewerCurrentId.value !== item.id
+      || collection.value !== activeCollection
+      || archiveIndex.value !== index
+      || archiveExtractionRequest !== navigationRequest
+    ) return false
+
+    item.fileHandle = fileHandle
+    item.file = file
+    item.size = file.size
+    item.lastModified = file.lastModified
+    item.width = undefined
+    item.height = undefined
+    if (item.kind === 'archive-entry') {
+      archiveEntryFiles.set(item.id, file)
+      touchArchiveCache(item.id)
+    }
+    return true
+  } catch (error) {
+    if (viewerOpen.value && viewerCurrentId.value === item.id) {
+      showError(describeError(error, '이미지를 다시 읽지 못했습니다. 파일과 접근 권한을 확인해주세요.'))
+    }
+    return false
+  }
 }
 
 function openTextViewer(item: MediaItem): void {
@@ -1562,6 +1609,14 @@ function moveSelection(delta: number): void {
 }
 
 function handleBrowserKeydown(event: KeyboardEvent): void {
+  if (event.key === 'F5') {
+    event.preventDefault()
+    if (
+      !viewerOpen.value && !textViewerItem.value
+      && !helpOpen.value && !optionsOpen.value && !batchTranslationDialogOpen.value
+    ) void refreshCollection()
+    return
+  }
   if (event.key === 'F1') {
     event.preventDefault()
     if (batchTranslationDialogOpen.value) return
@@ -1879,6 +1934,7 @@ onBeforeUnmount(() => {
       :items="viewerItems"
       :current-id="viewerCurrentId"
       :get-url="getUrl"
+      :refresh-image="refreshViewerImage"
       :initial-slideshow="initialSlideshow"
       :slideshow-preference="viewerSlideshowPreference"
       :delete-saved-translation="deleteSavedTranslation"

@@ -39,6 +39,10 @@ const emit = defineEmits<{
             <dd>도움말 열기</dd>
           </div>
           <div>
+            <dt><kbd>F5</kbd></dt>
+            <dd>이미지 상세보기에서는 현재 이미지, 목록에서는 현재 폴더 새로고침</dd>
+          </div>
+          <div>
             <dt><kbd>Enter</kbd></dt>
             <dd>상세보기 열기·닫기 (텍스트 편집 중에는 줄바꿈)</dd>
           </div>

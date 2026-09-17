@@ -39,6 +39,7 @@ interface Props {
   currentId: string;
   deleteSavedTranslation?: (item: MediaItem) => Promise<boolean>;
   getUrl: (item: MediaItem) => string;
+  refreshImage: (item: MediaItem) => Promise<boolean>;
   initialSlideshow?: boolean;
   items: MediaItem[];
   loadSavedTranslation?: (
@@ -98,6 +99,10 @@ const gifAnimationState = ref<
   "not-gif" | "checking" | "static" | "animated" | "unavailable"
 >("not-gif");
 const imageFailed = ref(false);
+const imageRefreshing = ref(false);
+const imageRevision = ref(0);
+let refreshRequest = 0;
+let preserveViewOnLoad = false;
 const initialImageReady = ref(false);
 const slideshowActive = ref(
   props.slideshowPreference.enabled && props.initialSlideshow,
@@ -582,7 +587,16 @@ function handleImageLoad(event: Event): void {
     image.naturalWidth,
     image.naturalHeight,
   );
-  applyZoomMode(true);
+  if (preserveViewOnLoad) {
+    preserveViewOnLoad = false;
+    clampPan();
+  } else {
+    applyZoomMode(true);
+  }
+  if (imageRefreshing.value) {
+    imageRefreshing.value = false;
+    syncSlideshowTimer();
+  }
   if (imageEnhancementActive.value) {
     void renderImageEnhancement(image, loadedItemId);
   }
@@ -590,9 +604,39 @@ function handleImageLoad(event: Event): void {
 }
 
 function handleImageError(): void {
+  if (imageRefreshing.value) syncSlideshowTimer();
+  imageRefreshing.value = false;
+  preserveViewOnLoad = false;
   imageEnhancementRequest += 1;
   imageEnhancementMode.value = "original";
   imageFailed.value = true;
+}
+
+async function refreshCurrentImage(): Promise<void> {
+  const item = currentItem.value;
+  if (!item || imageRefreshing.value) return;
+  const request = ++refreshRequest;
+  imageRefreshing.value = true;
+  stopSlideshowTimer();
+  try {
+    const refreshed = await props.refreshImage(item);
+    if (request !== refreshRequest || currentItem.value?.id !== item.id) return;
+    if (!refreshed) {
+      imageRefreshing.value = false;
+      return;
+    }
+    imageEnhancementRequest += 1;
+    disposeImageEnhancementRenderer();
+    imageEnhancementMode.value = "original";
+    imageFailed.value = false;
+    initialImageReady.value = false;
+    preserveViewOnLoad = true;
+    imageRevision.value += 1;
+    selectTranslationItem(item, true);
+    void updateGifAnimationState(item);
+  } finally {
+    if (request === refreshRequest && !preserveViewOnLoad) syncSlideshowTimer();
+  }
 }
 
 async function revealInitialImage(itemId: string): Promise<void> {
@@ -663,6 +707,12 @@ function endDrag(event: PointerEvent): void {
 }
 
 function handleKeydown(event: KeyboardEvent): void {
+  if (event.key === "F5") {
+    event.preventDefault();
+    event.stopPropagation();
+    void refreshCurrentImage();
+    return;
+  }
   const eventTarget = event.target;
   if (eventTarget instanceof Element && eventTarget.closest(".dialog-backdrop"))
     return;
@@ -778,6 +828,10 @@ watch(
 watch(
   () => props.currentId,
   async () => {
+    if (imageRefreshing.value) syncSlideshowTimer();
+    refreshRequest += 1;
+    imageRefreshing.value = false;
+    preserveViewOnLoad = false;
     closeTranslationMenu();
     imageEnhancementRequest += 1;
     disposeImageEnhancementRenderer();
@@ -812,6 +866,7 @@ onMounted(() => {
 });
 
 onBeforeUnmount(() => {
+  refreshRequest += 1;
   clearTranslationLongPressTimer();
   stopSlideshowTimer();
   imageEnhancementRequest += 1;
@@ -1047,7 +1102,7 @@ onBeforeUnmount(() => {
       >
         <img
           ref="imageElement"
-          :key="currentItem.id"
+          :key="`${currentItem.id}:${imageRevision}`"
           :src="getUrl(currentItem)"
           :alt="currentItem.name"
           :class="{

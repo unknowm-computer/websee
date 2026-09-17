@@ -49,7 +49,7 @@ const emit = defineEmits<{
     </button>
     <button
       type="button"
-      title="현재 폴더의 파일 목록 새로고침"
+      title="현재 폴더의 파일 목록 새로고침 (F5)"
       :disabled="!canRefresh"
       @click="emit('refresh')"
     >

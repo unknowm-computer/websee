@@ -394,9 +394,10 @@ export function useImageTranslation(options: UseImageTranslationOptions = {}) {
     showNotice('원본 폴더에 저장된 번역 결과를 불러왔습니다.')
   }
 
-  function selectItem(item: MediaItem | undefined): void {
+  function selectItem(item: MediaItem | undefined, refresh = false): void {
     const itemId = item?.id
-    if (itemId === currentItemId) return
+    if (itemId === currentItemId && !refresh) return
+    if (refresh && itemId) removeCachedResult(itemId)
     cancel()
     currentItemId = itemId
     dismissNotice()
