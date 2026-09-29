@@ -1,41 +1,44 @@
 <script setup lang="ts">
-import type { CSSProperties } from 'vue'
+import type { CSSProperties } from "vue";
 
-import { mapBoundsToDisplay } from '@/services/imageTranslation/detectorGeometry'
-import type { ImageTranslationRegion } from '@/types/imageTranslation'
+import { mapBoundsToDisplay } from "@/services/imageTranslation/detectorGeometry";
+import type { ImageTranslationRegion } from "@/types/imageTranslation";
 
 interface Props {
-  displayHeight: number
-  displayWidth: number
-  imageHeight: number
-  imageWidth: number
-  regions: readonly ImageTranslationRegion[]
-  viewerScale: number
+  displayHeight: number;
+  displayWidth: number;
+  imageHeight: number;
+  imageWidth: number;
+  regions: readonly ImageTranslationRegion[];
+  viewerScale: number;
 }
 
-const props = defineProps<Props>()
+const props = defineProps<Props>();
 
 function getRegionStyle(region: ImageTranslationRegion): CSSProperties {
-  const { bounds, translatedText } = region
+  const { bounds, translatedText } = region;
   const displayBounds = mapBoundsToDisplay(
     bounds,
     { width: props.imageWidth, height: props.imageHeight },
     { width: props.displayWidth, height: props.displayHeight },
-  )
-  const { x: left, y: top, width, height } = displayBounds
-  const areaPerCharacter = width * height / Math.max(1, translatedText.length)
+  );
+  const { x: left, y: top, width, height } = displayBounds;
+  const areaPerCharacter =
+    (width * height) / Math.max(1, translatedText.length);
   const calculatedFontSize = Math.max(
     10,
     Math.min(height * 0.34, width * 0.2, Math.sqrt(areaPerCharacter) * 0.78),
-  )
-  const safeViewerScale = Math.max(0.03, props.viewerScale)
-  const fontSize = region.kind === 'free-text'
-    ? Math.min(calculatedFontSize, 30 / safeViewerScale)
-    : calculatedFontSize
-  const calculatedPadding = Math.max(3, Math.min(width, height) * 0.06)
-  const padding = region.kind === 'free-text'
-    ? Math.min(calculatedPadding, 6 / safeViewerScale)
-    : calculatedPadding
+  );
+  const safeViewerScale = Math.max(0.03, props.viewerScale);
+  const fontSize =
+    region.kind === "free-text"
+      ? Math.min(calculatedFontSize, 30 / safeViewerScale)
+      : calculatedFontSize;
+  const calculatedPadding = Math.max(3, Math.min(width, height) * 0.06);
+  const padding =
+    region.kind === "free-text"
+      ? Math.min(calculatedPadding, 6 / safeViewerScale)
+      : calculatedPadding;
 
   return {
     left: `${left}px`,
@@ -44,7 +47,7 @@ function getRegionStyle(region: ImageTranslationRegion): CSSProperties {
     height: `${height}px`,
     padding: `${padding}px`,
     fontSize: `${fontSize}px`,
-  }
+  };
 }
 </script>
 
@@ -76,7 +79,7 @@ function getRegionStyle(region: ImageTranslationRegion): CSSProperties {
     display: flex;
     align-items: center;
     justify-content: center;
-    overflow: hidden;
+    // overflow: hidden;
     font-weight: 600;
     line-height: 1.28;
     color: #111;
@@ -88,6 +91,7 @@ function getRegionStyle(region: ImageTranslationRegion): CSSProperties {
     border: 1px solid rgb(0 0 0 / 28%);
     box-shadow: 0 1px 3px rgb(0 0 0 / 24%);
     pointer-events: auto;
+    text-shadow: 0 0 1px rgba(255, 255, 255, 1);
 
     &:hover {
       z-index: 1;
@@ -106,7 +110,7 @@ function getRegionStyle(region: ImageTranslationRegion): CSSProperties {
       display: block;
       max-width: 100%;
       max-height: 100%;
-      overflow: hidden;
+      // overflow: hidden;
     }
   }
 }
