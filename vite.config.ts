@@ -25,6 +25,8 @@ export default defineConfig({
   resolve: {
     alias: {
       '@': fileURLToPath(new URL('./src', import.meta.url)),
+      buffer: 'buffer/',
+      string_decoder: 'string_decoder/',
     },
   },
   test: {

@@ -13,9 +13,13 @@ import type { TextEditorActivityStatus } from "@/services/textEditorStatus";
 import {
   readTextFile,
   requestTextFileWritePermission,
+  TEXT_FILE_ENCODINGS,
   TEXT_VIEWER_MAX_BYTES,
+  TextFileSaveError,
   writeTextFile,
   type TextFileContent,
+  type TextFileEncoding,
+  type TextFileEncodingSelection,
 } from "@/services/textFile";
 import type { MediaItem } from "@/types/media";
 import { formatBytes, getExtension } from "@/utils/media";
@@ -46,6 +50,10 @@ const loading = ref(false);
 const editing = ref(false);
 const saving = ref(false);
 const editorActivityStatus = ref<TextEditorActivityStatus>();
+const encodingSelection = ref<TextFileEncodingSelection>("auto");
+const readEncodingSelection = ref<TextFileEncodingSelection>("auto");
+const savedEncoding = ref<TextFileEncoding>();
+let sourceFile = props.item.file;
 let requestId = 0;
 
 const ARROW_SCROLL_STEP = 26;
@@ -56,9 +64,25 @@ const canEdit = computed(() =>
 const hasOriginalFileHandle = computed(
   () => props.item.kind === "text" && props.item.fileHandle !== undefined,
 );
-const dirty = computed(
-  () => editing.value && editedText.value !== savedText.value,
+const saveEncoding = computed(() =>
+  encodingSelection.value === "auto"
+    ? content.value?.encoding
+    : encodingSelection.value,
 );
+const dirty = computed(
+  () => editing.value && (
+    editedText.value !== savedText.value ||
+    saveEncoding.value !== savedEncoding.value
+  ),
+);
+const encodingStatusText = computed(() => {
+  const sourceEncoding = content.value?.encoding;
+  if (!sourceEncoding || !saveEncoding.value) return "";
+  if (encodingSelection.value === "auto") return `${sourceEncoding} 원본 형식 유지`;
+  return sourceEncoding === saveEncoding.value
+    ? `${saveEncoding.value} 형식으로 저장`
+    : `${sourceEncoding} → ${saveEncoding.value}로 저장 예정`;
+});
 const editorFormat = computed(() =>
   getExtension(props.item.name).toUpperCase(),
 );
@@ -123,23 +147,36 @@ function handleKeydown(event: KeyboardEvent): void {
   });
 }
 
-async function loadContent(item: MediaItem): Promise<void> {
+function toEditorText(text: string): string {
+  // CodeMirror uses LF internally. Keep the decoded source unchanged so saving
+  // can restore its original line endings without marking normalization as edits.
+  return text.replace(/\r\n?/g, "\n");
+}
+
+async function loadContent(): Promise<void> {
   const currentRequestId = ++requestId;
   content.value = undefined;
   editedText.value = "";
   savedText.value = "";
+  savedEncoding.value = undefined;
   errorMessage.value = "";
   saveMessage.value = "";
   editorActivityStatus.value = undefined;
   editing.value = false;
+  saving.value = false;
   loading.value = true;
 
   try {
-    const nextContent = await readTextFile(item.file, TEXT_VIEWER_MAX_BYTES);
+    const nextContent = await readTextFile(
+      sourceFile,
+      TEXT_VIEWER_MAX_BYTES,
+      readEncodingSelection.value,
+    );
     if (currentRequestId !== requestId) return;
     content.value = nextContent;
-    editedText.value = nextContent.text;
-    savedText.value = nextContent.text;
+    editedText.value = toEditorText(nextContent.text);
+    savedText.value = editedText.value;
+    savedEncoding.value = nextContent.encoding;
   } catch {
     if (currentRequestId === requestId) {
       errorMessage.value = "텍스트 파일을 읽지 못했습니다.";
@@ -149,80 +186,111 @@ async function loadContent(item: MediaItem): Promise<void> {
   }
 }
 
-function startEditing(): void {
-  if (!canEdit.value) return;
+function changeEncoding(event: Event): void {
+  const select = event.currentTarget;
+  if (!(select instanceof HTMLSelectElement)) return;
+  const selection = select.value;
+  const nextEncoding = selection === "auto"
+    ? "auto"
+    : TEXT_FILE_ENCODINGS.find((encoding) => encoding === selection);
+  if (!nextEncoding || nextEncoding === encodingSelection.value) return;
+  if (loading.value || saving.value) {
+    select.value = encodingSelection.value;
+    return;
+  }
+
+  encodingSelection.value = nextEncoding;
   saveMessage.value = "";
+  if (editing.value) return;
+
+  readEncodingSelection.value = nextEncoding;
+  void loadContent();
+}
+
+function startEditing(): void {
+  if (!canEdit.value || !content.value) return;
+  saveMessage.value = "";
+  encodingSelection.value = readEncodingSelection.value;
+  savedText.value = toEditorText(content.value.text);
   editedText.value = savedText.value;
+  savedEncoding.value = content.value.encoding;
   editorActivityStatus.value = undefined;
   editing.value = true;
 }
 
 function cancelEditing(): void {
   if (!confirmDiscardChanges()) return;
+  savedText.value = toEditorText(content.value?.text ?? "");
   editedText.value = savedText.value;
+  savedEncoding.value = content.value?.encoding;
+  encodingSelection.value = readEncodingSelection.value;
   editorActivityStatus.value = undefined;
   editing.value = false;
   saveMessage.value = "";
   focusViewer();
 }
 
-function updateSavedContent(
-  text: string,
-  encoding: TextFileContent["encoding"],
-): void {
-  savedText.value = text;
-  editedText.value = text;
-  if (content.value) {
-    content.value = {
-      ...content.value,
-      encoding,
-      text,
-      truncated: false,
-    };
-  }
-}
-
 async function saveOriginal(): Promise<void> {
   const fileHandle = props.item.fileHandle;
-  const sourceEncoding = content.value?.encoding;
-  if (!fileHandle || !sourceEncoding || saving.value) return;
+  const sourceContent = content.value;
+  if (!fileHandle || !sourceContent || saving.value || !editing.value) return;
+
+  const currentRequestId = requestId;
+  const itemId = props.item.id;
+  const textToSave = editedText.value;
+  const selectionToSave = encodingSelection.value;
 
   saving.value = true;
   saveMessage.value = "";
   try {
     if (!(await requestTextFileWritePermission(fileHandle))) {
-      saveMessage.value =
-        "원본 쓰기 권한이 없습니다. 다른 이름으로 저장해주세요.";
+      if (currentRequestId === requestId) {
+        saveMessage.value =
+          "원본 쓰기 권한이 없습니다. 다른 이름으로 저장해주세요.";
+      }
       return;
     }
 
     const result = await writeTextFile(
       fileHandle,
-      editedText.value,
-      sourceEncoding,
+      textToSave,
+      sourceContent,
+      selectionToSave,
     );
-    updateSavedContent(editedText.value, result.encoding);
-    emit("saved", props.item.id, result.file);
+    emit("saved", itemId, result.file);
+    if (currentRequestId !== requestId) return;
+    sourceFile = result.file;
+    content.value = result.content;
+    savedText.value = textToSave;
+    savedEncoding.value = result.encoding;
+    readEncodingSelection.value = selectionToSave;
     saveMessage.value =
-      result.encoding === sourceEncoding
+      result.encoding === sourceContent.encoding
         ? "원본 파일에 저장했습니다."
         : `${result.encoding} 형식으로 원본 파일에 저장했습니다.`;
-  } catch {
-    saveMessage.value = "원본 파일에 저장하지 못했습니다.";
+  } catch (error) {
+    if (currentRequestId === requestId) {
+      saveMessage.value = error instanceof TextFileSaveError
+        ? error.message
+        : "원본 파일에 저장하지 못했습니다.";
+    }
   } finally {
-    saving.value = false;
+    if (currentRequestId === requestId) saving.value = false;
   }
 }
 
 async function saveAs(): Promise<void> {
-  const sourceEncoding = content.value?.encoding;
+  const sourceContent = content.value;
   const showSaveFilePicker = window.showSaveFilePicker;
-  if (!sourceEncoding || !showSaveFilePicker || saving.value) {
+  if (!sourceContent || !showSaveFilePicker || saving.value || !editing.value) {
     if (!showSaveFilePicker)
       saveMessage.value = "이 Chrome에서는 다른 이름으로 저장할 수 없습니다.";
     return;
   }
 
+  const currentRequestId = requestId;
+  const textToSave = editedText.value;
+  const selectionToSave = encodingSelection.value;
   saving.value = true;
   saveMessage.value = "";
   try {
@@ -238,26 +306,37 @@ async function saveAs(): Promise<void> {
     });
     const result = await writeTextFile(
       fileHandle,
-      editedText.value,
-      sourceEncoding,
+      textToSave,
+      sourceContent,
+      selectionToSave,
     );
-    savedText.value = editedText.value;
+    if (currentRequestId !== requestId) return;
+    savedText.value = textToSave;
+    savedEncoding.value = result.encoding;
     saveMessage.value =
-      result.encoding === sourceEncoding
+      result.encoding === sourceContent.encoding
         ? "새 파일로 저장했습니다."
         : `${result.encoding} 형식의 새 파일로 저장했습니다.`;
   } catch (error) {
-    if (!(error instanceof DOMException && error.name === "AbortError")) {
-      saveMessage.value = "새 파일로 저장하지 못했습니다.";
+    if (currentRequestId === requestId &&
+      !(error instanceof DOMException && error.name === "AbortError")) {
+      saveMessage.value = error instanceof TextFileSaveError
+        ? error.message
+        : "새 파일로 저장하지 못했습니다.";
     }
   } finally {
-    saving.value = false;
+    if (currentRequestId === requestId) saving.value = false;
   }
 }
 
 watch(
   () => props.item.id,
-  () => void loadContent(props.item),
+  () => {
+    sourceFile = props.item.file;
+    encodingSelection.value = "auto";
+    readEncodingSelection.value = "auto";
+    void loadContent();
+  },
   { immediate: true },
 );
 
@@ -278,6 +357,26 @@ onMounted(async () => {
     <header class="text-viewer__toolbar">
       <strong :title="item.path">{{ item.name }}</strong>
       <div class="text-viewer__actions">
+        <select
+          class="text-viewer__encoding"
+          aria-label="텍스트 인코딩"
+          :title="editing
+            ? '저장할 인코딩 선택 (자동 감지는 원본 유지)'
+            : '텍스트 인코딩을 선택하여 다시 읽기'"
+          :value="encodingSelection"
+          :disabled="loading || saving"
+          @change="changeEncoding"
+          @keydown.stop
+        >
+          <option value="auto">자동 감지 (원본 유지)</option>
+          <option
+            v-for="encoding in TEXT_FILE_ENCODINGS"
+            :key="encoding"
+            :value="encoding"
+          >
+            {{ encoding }}
+          </option>
+        </select>
         <template v-if="editing">
           <button
             v-if="hasOriginalFileHandle"
@@ -363,12 +462,7 @@ onMounted(async () => {
         <span v-else-if="!dirty && content?.truncated"
           >파일이 커서 앞부분 5 MB만 표시합니다.</span
         >
-        <span
-          v-else-if="
-            !dirty && editing && content?.encoding === 'CP949'
-          "
-          >저장 시 UTF-8로 변환됩니다.</span
-        >
+        <span v-else-if="editing">{{ encodingStatusText }}</span>
         <span v-if="dirty">수정됨</span>
       </div>
     </footer>
@@ -409,6 +503,12 @@ onMounted(async () => {
     display: flex;
     flex: 0 0 auto;
     gap: 4px;
+  }
+
+  &__encoding {
+    height: 27px;
+    background: var(--color-light);
+    border: 1px solid var(--color-shadow-dark);
   }
 
   &__actions button {
