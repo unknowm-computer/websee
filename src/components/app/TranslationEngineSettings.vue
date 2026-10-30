@@ -103,8 +103,11 @@ watch(
           WebSee 소스 폴더에서 다음 명령을 터미널에 실행하세요. Swift
           컴파일러(Command Line Tools)가 필요합니다.
         </p>
-        <code ref="commandElement">{{ installCommand ?? "sh native/macos/install.sh <WebSee 확장 프로그램 ID>" }}</code>
-        <button v-if="installCommand && state !== 'error'" type="button" @click="copyInstallCommand">설치 명령 복사</button>
+
+        <div class="translation-engine-settings__command-area">
+          <code ref="commandElement">{{ installCommand ?? "sh native/macos/install.sh <WebSee 확장 프로그램 ID>" }}</code>
+          <button v-if="installCommand && state !== 'error'" type="button" @click="copyInstallCommand">복사</button>
+        </div>
         <p v-if="!extensionId">
           확장 프로그램 ID는 chrome://extensions에서 개발자 모드를 켜 확인할 수
           있습니다. 개발 서버에서는 도우미에 연결할 수 없습니다.
@@ -134,14 +137,21 @@ watch(
       cursor: pointer;
       padding-bottom: 10px;
     }
+  }
+
+  &__command-area {
+    overflow-wrap: anywhere;
+    user-select: text;
+    background: var(--color-face);
+    padding: 8px;
+    margin-bottom: 10px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
 
     code {
       display: block;
-      padding: 8px;
-      margin-bottom: 10px;
-      overflow-wrap: anywhere;
-      user-select: text;
-      background: var(--color-face);
+      flex: 1;
     }
   }
 

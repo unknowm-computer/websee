@@ -95,6 +95,16 @@ describe('viewer translation overlay preference', () => {
 })
 
 describe('translation enabled preference', () => {
+  it('uses browser engines on other platforms without overwriting saved native preferences', () => {
+    const storage = createStorage({
+      'websee-translation-engine': 'apple',
+      'websee-ocr-engine': 'apple-vision',
+    })
+    expect(readTranslationEnginePreference(storage, false)).toBe('chrome')
+    expect(readOcrEnginePreference(storage, false)).toBe('baberu')
+    expect(readTranslationEnginePreference(storage, true)).toBe('apple')
+    expect(readOcrEnginePreference(storage, true)).toBe('apple-vision')
+  })
   it('defaults to Baberu and restores the independent OCR choice', () => {
     const storage = createStorage({ 'websee-ocr-engine': 'unknown' })
     expect(readOcrEnginePreference(storage)).toBe('baberu')

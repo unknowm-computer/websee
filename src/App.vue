@@ -73,6 +73,7 @@ import {
   naturalCompare,
   sortMediaItems,
 } from '@/utils/media'
+import { isMacOS } from '@/utils/platform'
 import {
   readTranslationEnabledPreference,
   readTranslationEnginePreference,
@@ -106,9 +107,10 @@ const viewerSlideshowPreference = reactive<ViewerSlideshowPreference>(
   readViewerSlideshowPreference(localStorage),
 )
 const translationEnabled = ref(readTranslationEnabledPreference(localStorage))
-const translationEngine = ref(readTranslationEnginePreference(localStorage))
+const macosPlatform = isMacOS()
+const translationEngine = ref(readTranslationEnginePreference(localStorage, macosPlatform))
 const appleTranslationModel = ref(readAppleTranslationModelPreference(localStorage))
-const ocrEngine = ref(readOcrEnginePreference(localStorage))
+const ocrEngine = ref(readOcrEnginePreference(localStorage, macosPlatform))
 const viewerOpen = ref(false)
 const textViewerItem = ref<MediaItem>()
 const viewerItems = ref<MediaItem[]>([])
@@ -1979,6 +1981,7 @@ onBeforeUnmount(() => {
       :translation-enabled="translationEnabled"
       :translation-engine="translationEngine"
       :translation-busy="batchTranslationActive"
+      :macos-platform="macosPlatform"
       :apple-translation-model="appleTranslationModel"
       :ocr-engine="ocrEngine"
       @close="optionsOpen = false"

@@ -32,6 +32,8 @@
 
 `옵션 → 이미지 번역 → OCR`에서 `기본 (Baberu)` 또는 `macOS Vision`을 선택합니다. 기존 설정은 Baberu로 유지되며, OCR과 번역기는 독립적으로 선택하고 다음 실행에도 유지합니다. 예를 들어 `macOS Vision + Chrome 내장 번역`을 사용할 수 있습니다. 진행 중인 일괄 번역에서는 OCR 선택도 비활성화됩니다.
 
+OCR·번역기 선택 메뉴와 macOS 도우미 안내는 macOS에서만 표시합니다. 다른 OS이거나 OS를 확인할 수 없으면 기본 Baberu OCR과 Chrome 내장 번역을 사용합니다.
+
 macOS Vision은 기존 말풍선·텍스트 영역 감지를 유지하고 글자 인식만 macOS `Vision` framework의 정확도 우선 모드로 처리합니다. 영역의 위치와 종류는 그대로 유지하며 개별·일괄 번역 모두 적용됩니다. 이미지는 로컬 Native Messaging으로만 도우미에 전달합니다. 이 경로에서는 Baberu OCR 모델을 내려받거나 실행하지 않으며 영역 감지 모델은 계속 사용합니다. 기존에 내려받은 모델을 자동으로 삭제하지는 않습니다.
 
 같은 영역 안의 OCR 줄바꿈은 번역 전에 이어 붙이고, 화면에서는 영역 폭에 따라 자동 줄바꿈합니다. 일본어·중국어 글자 사이는 공백 없이 연결하며 원문 툴팁과 저장 데이터에는 실제 OCR 결과를 보존합니다.
@@ -102,3 +104,9 @@ npm run typecheck
 npm run test
 npm run build
 ```
+
+## 향후 계획
+
+- [ ] **Windows 내장 OCR 지원**: Windows용 Native Messaging 도우미를 추가해 기존 영역 감지 및 Chrome 내장 번역과 연결합니다. 일반 PC의 `Windows.Media.Ocr`를 우선 검토하고, 지원되는 Copilot+ PC에서는 Windows AI OCR도 검토합니다.
+
+현재 Windows 테스트 PC가 없어 구현은 보류합니다. 테스트 환경을 확보한 뒤 설치·패키징·언어팩 처리, 영어·일본어·중국어 인식률과 속도, 개별·일괄 번역 및 취소 동작을 검증한 후 지원을 추가합니다.

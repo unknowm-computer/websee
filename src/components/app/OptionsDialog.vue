@@ -31,6 +31,7 @@ interface Props {
   appleTranslationModel: AppleTranslationModel;
   ocrEngine: OcrEngineId;
   translationBusy: boolean;
+  macosPlatform: boolean;
 }
 
 const props = defineProps<Props>();
@@ -294,7 +295,7 @@ onMounted(() => {
               <span>이미지 번역 기능 사용</span>
             </label>
             <label
-              v-if="translationEnabled"
+              v-if="translationEnabled && macosPlatform"
               class="options-dialog__select-setting"
             >
               <span>OCR</span>
@@ -304,7 +305,7 @@ onMounted(() => {
               </select>
             </label>
             <label
-              v-if="translationEnabled"
+              v-if="translationEnabled && macosPlatform"
               class="options-dialog__select-setting"
             >
               <span>번역기</span>
@@ -320,13 +321,13 @@ onMounted(() => {
             </label>
           </div>
           <TranslationEngineSettings
-            v-if="translationEnabled"
+            v-if="translationEnabled && macosPlatform"
             :engine="translationEngine"
             :apple-model="appleTranslationModel"
             :ocr-engine="ocrEngine"
           />
           <p
-            v-if="translationEnabled && translationBusy"
+            v-if="translationEnabled && macosPlatform && translationBusy"
             class="options-dialog__note"
           >
             일괄 번역을 마친 후 OCR과 번역기를 변경할 수 있습니다.
@@ -336,7 +337,9 @@ onMounted(() => {
             최초 번역 시 내려받은 영역 감지·OCR 모델을 이 브라우저에 보관합니다.
             전체 크기는 약
             {{ formatBytes(IMAGE_TRANSLATION_MODEL_TOTAL_BYTES) }}입니다.
-            macOS Vision을 선택하면 영역 감지 모델만 사용하며 Baberu OCR 모델은 내려받지 않습니다.
+            <template v-if="macosPlatform">
+              macOS Vision을 선택하면 영역 감지 모델만 사용하며 Baberu OCR 모델은 내려받지 않습니다.
+            </template>
           </p>
           <div class="options-dialog__status">
             <span>{{ cacheDescription }}</span>

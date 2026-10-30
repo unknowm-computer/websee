@@ -90,8 +90,8 @@ export function readTranslationEnabledPreference(storage: ReadableStorage): bool
   return storage.getItem(TRANSLATION_ENABLED_STORAGE_KEY) === 'true'
 }
 
-export function readTranslationEnginePreference(storage: ReadableStorage): TranslationEngineId {
-  return storage.getItem(TRANSLATION_ENGINE_STORAGE_KEY) === 'apple' ? 'apple' : 'chrome'
+export function readTranslationEnginePreference(storage: ReadableStorage, allowNativeEngines = true): TranslationEngineId {
+  return allowNativeEngines && storage.getItem(TRANSLATION_ENGINE_STORAGE_KEY) === 'apple' ? 'apple' : 'chrome'
 }
 
 export function writeTranslationEnginePreference(storage: WritableStorage, engine: TranslationEngineId): void {
@@ -106,8 +106,8 @@ export function writeAppleTranslationModelPreference(storage: WritableStorage, m
   storage.setItem(APPLE_TRANSLATION_MODEL_STORAGE_KEY, model)
 }
 
-export function readOcrEnginePreference(storage: ReadableStorage): OcrEngineId {
-  return storage.getItem(OCR_ENGINE_STORAGE_KEY) === 'apple-vision' ? 'apple-vision' : 'baberu'
+export function readOcrEnginePreference(storage: ReadableStorage, allowNativeEngines = true): OcrEngineId {
+  return allowNativeEngines && storage.getItem(OCR_ENGINE_STORAGE_KEY) === 'apple-vision' ? 'apple-vision' : 'baberu'
 }
 
 export function writeOcrEnginePreference(storage: WritableStorage, engine: OcrEngineId): void {
