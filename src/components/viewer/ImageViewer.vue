@@ -21,6 +21,7 @@ import {
   type ImageEnhancementRenderer,
 } from "@/services/imageEnhancement";
 import type { ImageTranslationResult } from "@/types/imageTranslation";
+import type { AppleTranslationModel, OcrEngineId, TranslationEngineId } from "@/types/translationEngine";
 import type { MediaItem } from "@/types/media";
 import { formatBytes } from "@/utils/media";
 import { calculateAnchoredPan } from "@/utils/viewerGeometry";
@@ -36,6 +37,9 @@ import {
 } from "@/utils/viewerPreferences";
 
 interface Props {
+  translationEngine: TranslationEngineId;
+  appleTranslationModel: AppleTranslationModel;
+  ocrEngine: OcrEngineId;
   currentId: string;
   deleteSavedTranslation?: (item: MediaItem) => Promise<boolean>;
   getUrl: (item: MediaItem) => string;
@@ -124,6 +128,9 @@ const {
   toggle: toggleImageTranslation,
   toggleOverlay: toggleTranslationOverlay,
 } = useImageTranslation({
+  getEngine: () => props.translationEngine,
+  getAppleModel: () => props.appleTranslationModel,
+  getOcrEngine: () => props.ocrEngine,
   deleteSavedResult: props.deleteSavedTranslation,
   initialOverlayVisible: readViewerTranslationOverlayPreference(localStorage),
   loadSavedResult: props.loadSavedTranslation,

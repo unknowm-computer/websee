@@ -8,6 +8,7 @@ import type {
   BatchTranslationState,
 } from "@/types/batchTranslation";
 import type { MediaItem } from "@/types/media";
+import type { TranslationEngineId } from "@/types/translationEngine";
 
 interface Props {
   archiveCount: number;
@@ -17,6 +18,7 @@ interface Props {
   initialSelectedItemId?: string;
   items: readonly MediaItem[];
   state: BatchTranslationState;
+  translationEngine: TranslationEngineId;
 }
 
 const props = defineProps<Props>();
@@ -262,7 +264,7 @@ function handleEscape(): void {
           @click="emit('continue')"
         >
           <SvgIcon name="download-for-offline" :size="18" />
-          번역 모델 받기
+          {{ translationEngine === 'apple' ? '번역 계속' : '번역 모델 받기' }}
         </button>
         <template v-if="active">
           <button

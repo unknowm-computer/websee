@@ -75,8 +75,14 @@ import {
 } from '@/utils/media'
 import {
   readTranslationEnabledPreference,
+  readTranslationEnginePreference,
+  readAppleTranslationModelPreference,
+  readOcrEnginePreference,
   readViewerSlideshowPreference,
   writeTranslationEnabledPreference,
+  writeTranslationEnginePreference,
+  writeAppleTranslationModelPreference,
+  writeOcrEnginePreference,
   writeViewerSlideshowPreference,
   type ViewerSlideshowPreference,
 } from '@/utils/viewerPreferences'
@@ -100,6 +106,9 @@ const viewerSlideshowPreference = reactive<ViewerSlideshowPreference>(
   readViewerSlideshowPreference(localStorage),
 )
 const translationEnabled = ref(readTranslationEnabledPreference(localStorage))
+const translationEngine = ref(readTranslationEnginePreference(localStorage))
+const appleTranslationModel = ref(readAppleTranslationModelPreference(localStorage))
+const ocrEngine = ref(readOcrEnginePreference(localStorage))
 const viewerOpen = ref(false)
 const textViewerItem = ref<MediaItem>()
 const viewerItems = ref<MediaItem[]>([])
@@ -178,7 +187,7 @@ const {
   start: startBatchTranslation,
   state: batchTranslationState,
   stop: stopBatchTranslation,
-} = useBatchImageTranslation()
+} = useBatchImageTranslation(() => translationEngine.value, () => appleTranslationModel.value, () => ocrEngine.value)
 const {
   endResize,
   paneStyle,
@@ -1730,6 +1739,9 @@ watch(
 watch(translationEnabled, (value) =>
   writeTranslationEnabledPreference(localStorage, value),
 )
+watch(translationEngine, (value) => writeTranslationEnginePreference(localStorage, value))
+watch(appleTranslationModel, (value) => writeAppleTranslationModelPreference(localStorage, value))
+watch(ocrEngine, (value) => writeOcrEnginePreference(localStorage, value))
 
 onMounted(() => window.addEventListener('keydown', handleBrowserKeydown))
 onBeforeUnmount(() => {
@@ -1925,6 +1937,7 @@ onBeforeUnmount(() => {
     <BatchTranslationMiniStatus
       v-if="batchTranslationActive && !batchTranslationDialogOpen"
       :state="batchTranslationState"
+      :translation-engine="translationEngine"
       @continue="continueBatchTranslation"
       @open="showBatchTranslationDialog"
     />
@@ -1942,6 +1955,9 @@ onBeforeUnmount(() => {
       :prepare-translation-persistence="prepareTranslationPersistence"
       :save-translation="saveTranslation"
       :translation-disabled="batchTranslationActive"
+      :apple-translation-model="appleTranslationModel"
+      :translation-engine="translationEngine"
+      :ocr-engine="ocrEngine"
       :translation-enabled="translationEnabled"
       @close="closeViewer"
       @select="selectViewerItem"
@@ -1961,14 +1977,22 @@ onBeforeUnmount(() => {
       :file-list-columns="fileListColumns"
       :slideshow-preference="viewerSlideshowPreference"
       :translation-enabled="translationEnabled"
+      :translation-engine="translationEngine"
+      :translation-busy="batchTranslationActive"
+      :apple-translation-model="appleTranslationModel"
+      :ocr-engine="ocrEngine"
       @close="optionsOpen = false"
       @set-file-list-column="setFileListColumn"
       @update-slideshow-preference="updateViewerSlideshowPreference"
       @update-translation-enabled="updateTranslationEnabled"
+      @update-translation-engine="translationEngine = $event"
+      @update-apple-translation-model="appleTranslationModel = $event"
+      @update-ocr-engine="ocrEngine = $event"
     />
     <BatchTranslationDialog
       v-if="batchTranslationDialogOpen"
       :archive-count="batchArchiveCount"
+      :translation-engine="translationEngine"
       :directory-handle="directoryHandleCache.get(selectedDirectory)"
       :folder-label="batchFolderLabel"
       :image-count="batchImageCount"

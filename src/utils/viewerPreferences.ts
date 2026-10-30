@@ -1,3 +1,5 @@
+import type { AppleTranslationModel, OcrEngineId, TranslationEngineId } from '@/types/translationEngine'
+
 export type ViewerZoomMode = 'fit' | 'width' | 'actual' | 'custom'
 
 export interface ViewerZoomPreference {
@@ -21,6 +23,9 @@ const ZOOM_SCALE_STORAGE_KEY = 'websee-viewer-zoom-scale'
 const ENHANCEMENT_STORAGE_KEY = 'websee-viewer-image-enhancement'
 const TRANSLATION_OVERLAY_STORAGE_KEY = 'websee-viewer-translation-overlay-visible'
 const TRANSLATION_ENABLED_STORAGE_KEY = 'websee-translation-enabled'
+const TRANSLATION_ENGINE_STORAGE_KEY = 'websee-translation-engine'
+const APPLE_TRANSLATION_MODEL_STORAGE_KEY = 'websee-apple-translation-model'
+const OCR_ENGINE_STORAGE_KEY = 'websee-ocr-engine'
 const SLIDESHOW_STORAGE_KEY = 'websee-viewer-slideshow'
 const MIN_ZOOM_SCALE = 0.03
 const MAX_ZOOM_SCALE = 16
@@ -83,6 +88,30 @@ export function writeViewerTranslationOverlayPreference(
 
 export function readTranslationEnabledPreference(storage: ReadableStorage): boolean {
   return storage.getItem(TRANSLATION_ENABLED_STORAGE_KEY) === 'true'
+}
+
+export function readTranslationEnginePreference(storage: ReadableStorage): TranslationEngineId {
+  return storage.getItem(TRANSLATION_ENGINE_STORAGE_KEY) === 'apple' ? 'apple' : 'chrome'
+}
+
+export function writeTranslationEnginePreference(storage: WritableStorage, engine: TranslationEngineId): void {
+  storage.setItem(TRANSLATION_ENGINE_STORAGE_KEY, engine)
+}
+
+export function readAppleTranslationModelPreference(storage: ReadableStorage): AppleTranslationModel {
+  return storage.getItem(APPLE_TRANSLATION_MODEL_STORAGE_KEY) === 'high-fidelity' ? 'high-fidelity' : 'low-latency'
+}
+
+export function writeAppleTranslationModelPreference(storage: WritableStorage, model: AppleTranslationModel): void {
+  storage.setItem(APPLE_TRANSLATION_MODEL_STORAGE_KEY, model)
+}
+
+export function readOcrEnginePreference(storage: ReadableStorage): OcrEngineId {
+  return storage.getItem(OCR_ENGINE_STORAGE_KEY) === 'apple-vision' ? 'apple-vision' : 'baberu'
+}
+
+export function writeOcrEnginePreference(storage: WritableStorage, engine: OcrEngineId): void {
+  storage.setItem(OCR_ENGINE_STORAGE_KEY, engine)
 }
 
 export function writeTranslationEnabledPreference(

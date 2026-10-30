@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from "vue";
 
+import TranslationEngineSettings from "@/components/app/TranslationEngineSettings.vue";
 import SvgIcon from "@/components/common/SvgIcon.vue";
 import {
   clearCachedTranslationModelData,
@@ -15,6 +16,7 @@ import type {
   MediaListColumnKey,
   MediaListColumnVisibility,
 } from "@/types/media";
+import type { AppleTranslationModel, OcrEngineId, TranslationEngineId } from "@/types/translationEngine";
 import { formatBytes } from "@/utils/media";
 import {
   VIEWER_SLIDESHOW_INTERVAL_OPTIONS,
@@ -25,18 +27,29 @@ interface Props {
   fileListColumns: MediaListColumnVisibility;
   slideshowPreference: ViewerSlideshowPreference;
   translationEnabled: boolean;
+  translationEngine: TranslationEngineId;
+  appleTranslationModel: AppleTranslationModel;
+  ocrEngine: OcrEngineId;
+  translationBusy: boolean;
 }
 
 const props = defineProps<Props>();
 
 const emit = defineEmits<{
   (event: "close"): void;
-  (event: "set-file-list-column", column: MediaListColumnKey, visible: boolean): void;
+  (
+    event: "set-file-list-column",
+    column: MediaListColumnKey,
+    visible: boolean,
+  ): void;
   (
     event: "update-slideshow-preference",
     preference: ViewerSlideshowPreference,
   ): void;
   (event: "update-translation-enabled", enabled: boolean): void;
+  (event: "update-translation-engine", engine: TranslationEngineId): void;
+  (event: "update-apple-translation-model", model: AppleTranslationModel): void;
+  (event: "update-ocr-engine", engine: OcrEngineId): void;
 }>();
 
 const fileListColumnOptions: ReadonlyArray<{
@@ -62,6 +75,10 @@ const cacheDescription = computed(() => {
 });
 
 const dialogBusy = computed(() => modelClearing.value);
+const selectedTranslationEngine = computed<TranslationEngineId | "apple-intelligence">(() => {
+  if (props.translationEngine === "chrome") return "chrome";
+  return props.appleTranslationModel === "high-fidelity" ? "apple-intelligence" : "apple";
+});
 
 function requestClose(): void {
   if (!dialogBusy.value) emit("close");
@@ -109,6 +126,30 @@ function setTranslationEnabled(event: Event): void {
   const checkbox = event.currentTarget;
   if (!(checkbox instanceof HTMLInputElement)) return;
   emit("update-translation-enabled", checkbox.checked);
+}
+
+function setTranslationEngine(event: Event): void {
+  const select = event.currentTarget;
+  if (!(select instanceof HTMLSelectElement)) return;
+  if (select.value === "chrome") {
+    emit("update-translation-engine", "chrome");
+    return;
+  }
+  if (select.value === "apple" || select.value === "apple-intelligence") {
+    emit(
+      "update-apple-translation-model",
+      select.value === "apple-intelligence" ? "high-fidelity" : "low-latency",
+    );
+    emit("update-translation-engine", "apple");
+  }
+}
+
+function setOcrEngine(event: Event): void {
+  const select = event.currentTarget;
+  if (!(select instanceof HTMLSelectElement)) return;
+  if (select.value === "baberu" || select.value === "apple-vision") {
+    emit("update-ocr-engine", select.value);
+  }
 }
 
 async function refreshCachedData(): Promise<void> {
@@ -178,7 +219,10 @@ onMounted(() => {
       <div class="options-dialog__body">
         <section aria-labelledby="file-list-columns-title">
           <h2 id="file-list-columns-title">파일 목록 표시 항목</h2>
-          <p>목록 보기에서 파일명 옆에 표시할 정보를 선택합니다. 파일명은 항상 표시됩니다.</p>
+          <p>
+            목록 보기에서 파일명 옆에 표시할 정보를 선택합니다. 파일명은 항상
+            표시됩니다.
+          </p>
           <div class="options-dialog__checkboxes">
             <label v-for="option in fileListColumnOptions" :key="option.key">
               <input
@@ -237,11 +281,11 @@ onMounted(() => {
         <section aria-labelledby="translation-title">
           <h2 id="translation-title">이미지 번역</h2>
           <p>
-            기능을 사용하면 이미지 뷰어의 번역 버튼과 메인 툴바의 일괄
-            번역 버튼을 표시합니다.
+            기능을 사용하면 이미지 뷰어의 번역 버튼과 메인 툴바의 일괄 번역
+            버튼을 표시합니다.
           </p>
-          <div class="options-dialog__feature-settings">
-            <label>
+          <div class="options-dialog__feature-settings translation-setting">
+            <label class="options-dialog__feature-toggle">
               <input
                 type="checkbox"
                 :checked="translationEnabled"
@@ -249,12 +293,50 @@ onMounted(() => {
               />
               <span>이미지 번역 기능 사용</span>
             </label>
+            <label
+              v-if="translationEnabled"
+              class="options-dialog__select-setting"
+            >
+              <span>OCR</span>
+              <select :value="ocrEngine" :disabled="translationBusy" @change="setOcrEngine">
+                <option value="baberu">기본 (Baberu)</option>
+                <option value="apple-vision">macOS Vision</option>
+              </select>
+            </label>
+            <label
+              v-if="translationEnabled"
+              class="options-dialog__select-setting"
+            >
+              <span>번역기</span>
+              <select
+                :value="selectedTranslationEngine"
+                :disabled="translationBusy"
+                @change="setTranslationEngine"
+              >
+                <option value="chrome">Chrome 내장 번역</option>
+                <option value="apple">macOS Apple 번역</option>
+                <option value="apple-intelligence">Apple Intelligence</option>
+              </select>
+            </label>
           </div>
-          <h3>번역 모델 데이터</h3>
+          <TranslationEngineSettings
+            v-if="translationEnabled"
+            :engine="translationEngine"
+            :apple-model="appleTranslationModel"
+            :ocr-engine="ocrEngine"
+          />
+          <p
+            v-if="translationEnabled && translationBusy"
+            class="options-dialog__note"
+          >
+            일괄 번역을 마친 후 OCR과 번역기를 변경할 수 있습니다.
+          </p>
+          <h3>영역 감지·OCR 모델 데이터</h3>
           <p>
             최초 번역 시 내려받은 영역 감지·OCR 모델을 이 브라우저에 보관합니다.
             전체 크기는 약
             {{ formatBytes(IMAGE_TRANSLATION_MODEL_TOTAL_BYTES) }}입니다.
+            macOS Vision을 선택하면 영역 감지 모델만 사용하며 Baberu OCR 모델은 내려받지 않습니다.
           </p>
           <div class="options-dialog__status">
             <span>{{ cacheDescription }}</span>
@@ -278,7 +360,6 @@ onMounted(() => {
             삭제 후 이미지 번역을 다시 사용하면 필요한 모델을 다시 내려받습니다.
           </p>
         </section>
-
       </div>
 
       <footer>
@@ -319,6 +400,7 @@ onMounted(() => {
       place-items: center;
       width: 23px;
       height: 22px;
+      min-height: unset;
       padding: 0;
       background: var(--color-face);
       border: 1px solid;
@@ -397,6 +479,23 @@ onMounted(() => {
       gap: 7px;
       align-items: center;
     }
+
+    &.translation-setting {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+
+      .options-dialog__select-setting {
+        flex-wrap: wrap;
+
+        select {
+          min-width: 0;
+          max-width: 100%;
+        }
+      }
+    }
+  }
+
+  &__feature-toggle {
+    grid-column: 1 / -1;
   }
 
   &__select-setting {
@@ -431,6 +530,27 @@ onMounted(() => {
     border-color: var(--color-light) var(--color-shadow-dark)
       var(--color-shadow-dark) var(--color-light);
 
+    &:not(:disabled) {
+      cursor: pointer;
+    }
+
+    &:hover:not(:disabled) {
+      background: var(--color-highlight);
+    }
+
+    &:focus-visible {
+      outline: 2px solid var(--color-selection);
+      outline-offset: -3px;
+    }
+
+    &:active:not(:disabled) {
+      background: var(--color-pressed);
+      border-color: var(--color-shadow-dark) var(--color-light)
+        var(--color-light) var(--color-shadow-dark);
+      box-shadow: inset 1px 1px var(--color-shadow);
+      transform: translateY(1px);
+    }
+
     &:disabled {
       color: var(--color-disabled);
     }
@@ -439,7 +559,7 @@ onMounted(() => {
   footer {
     display: flex;
     justify-content: flex-end;
-    padding: 0 12px 12px;
+    padding: 8px 12px;
 
     button {
       min-width: 76px;

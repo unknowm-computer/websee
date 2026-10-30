@@ -2,6 +2,9 @@ import { describe, expect, it } from 'vitest'
 
 import {
   readTranslationEnabledPreference,
+  readTranslationEnginePreference,
+  readAppleTranslationModelPreference,
+  readOcrEnginePreference,
   readViewerEnhancementPreference,
   readViewerSlideshowPreference,
   readViewerTranslationOverlayPreference,
@@ -11,6 +14,9 @@ import {
   writeViewerTranslationOverlayPreference,
   writeViewerZoomPreference,
   writeTranslationEnabledPreference,
+  writeTranslationEnginePreference,
+  writeAppleTranslationModelPreference,
+  writeOcrEnginePreference,
 } from '@/utils/viewerPreferences'
 
 function createStorage(initialEntries: Record<string, string> = {}): Storage {
@@ -89,6 +95,25 @@ describe('viewer translation overlay preference', () => {
 })
 
 describe('translation enabled preference', () => {
+  it('defaults to Baberu and restores the independent OCR choice', () => {
+    const storage = createStorage({ 'websee-ocr-engine': 'unknown' })
+    expect(readOcrEnginePreference(storage)).toBe('baberu')
+    writeOcrEnginePreference(storage, 'apple-vision')
+    expect(readOcrEnginePreference(storage)).toBe('apple-vision')
+    expect(readTranslationEnginePreference(storage)).toBe('chrome')
+  })
+  it('keeps the existing speed model by default and restores the chosen quality model', () => {
+    const storage = createStorage({ 'websee-apple-translation-model': 'unknown' })
+    expect(readAppleTranslationModelPreference(storage)).toBe('low-latency')
+    writeAppleTranslationModelPreference(storage, 'high-fidelity')
+    expect(readAppleTranslationModelPreference(storage)).toBe('high-fidelity')
+  })
+  it('defaults to Chrome and persists Apple as the selected engine', () => {
+    const storage = createStorage({ 'websee-translation-engine': 'unknown' })
+    expect(readTranslationEnginePreference(storage)).toBe('chrome')
+    writeTranslationEnginePreference(storage, 'apple')
+    expect(readTranslationEnginePreference(storage)).toBe('apple')
+  })
   it('is disabled by default and ignores invalid values', () => {
     expect(readTranslationEnabledPreference(createStorage())).toBe(false)
     expect(readTranslationEnabledPreference(createStorage({

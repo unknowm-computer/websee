@@ -1,16 +1,14 @@
 import { computed, onBeforeUnmount, ref } from 'vue'
 
 import {
-  detectSourceLanguage,
-  getTranslationAvailability,
-  isChromeTranslatorSupported,
   isTranslationImmediatelyAvailable,
   isTranslationUnavailable,
-  prepareLanguageDetector,
-  translateRecognizedRegions,
   type LanguageDetectorInstance,
   type SupportedSourceLanguage,
 } from '@/services/imageTranslation/chromeTranslator'
+import { createTranslationEngine } from '@/services/imageTranslation/translationEngine'
+import { checkAppleOcr, recognizeAppleRegions } from '@/services/imageTranslation/appleOcr'
+import type { AppleTranslationModel, OcrEngineId, TranslationEngineId } from '@/types/translationEngine'
 import type {
   ImageTranslationProgress,
   ImageTranslationResult,
@@ -36,6 +34,9 @@ interface PendingTranslation {
 }
 
 interface UseImageTranslationOptions {
+  getEngine?: () => TranslationEngineId
+  getAppleModel?: () => AppleTranslationModel
+  getOcrEngine?: () => OcrEngineId
   deleteSavedResult?: (item: MediaItem) => Promise<boolean>
   initialOverlayVisible?: boolean
   loadSavedResult?: (item: MediaItem) => Promise<ImageTranslationResult | undefined>
@@ -70,6 +71,8 @@ export function useImageTranslation(options: UseImageTranslationOptions = {}) {
   let pendingTranslation: PendingTranslation | undefined
   let noticeTimer: number | undefined
   let overlayPreferredVisible = options.initialOverlayVisible ?? true
+  let engine = createTranslationEngine(options.getEngine?.() ?? 'chrome', options.getAppleModel?.())
+  let ocrEngine: OcrEngineId = 'baberu'
 
   const processing = computed(() =>
     progress.value.phase === 'preparing'
@@ -183,7 +186,7 @@ export function useImageTranslation(options: UseImageTranslationOptions = {}) {
 
   async function finishPendingTranslation(pending: PendingTranslation): Promise<void> {
     try {
-      const regions = await translateRecognizedRegions(
+      const regions = await engine.translate(
         pending.regions,
         pending.sourceLanguage,
         (nextProgress) => {
@@ -239,21 +242,30 @@ export function useImageTranslation(options: UseImageTranslationOptions = {}) {
   function continueTranslation(): void {
     const pending = pendingTranslation
     if (!pending || pending.requestId !== activeRequestId) return
+    pendingTranslation = undefined
     progress.value = {
       phase: 'translating',
-      message: 'Chrome 번역 기능을 시작하는 중입니다.',
+      message: `${engine.name} 기능을 시작하는 중입니다.`,
     }
     void finishPendingTranslation(pending)
   }
 
   async function handleAnalysisResult(
-    message: Extract<ImageTranslationWorkerResponse, { type: 'result' }>,
+    message: Extract<ImageTranslationWorkerResponse, { type: 'result' | 'detection-result' }>,
   ): Promise<void> {
     const requestItem = activeRequestItem
     if (message.requestId !== activeRequestId || !currentItemId || !requestItem) return
 
     try {
-      if (!message.regions.length) {
+      const controller = translationController
+      if (!controller) return
+      const regions = message.type === 'detection-result'
+        ? await recognizeAppleRegions(requestItem.file, message.candidates, (nextProgress) => {
+          if (message.requestId === activeRequestId) progress.value = nextProgress
+        }, controller.signal)
+        : message.regions
+      if (message.requestId !== activeRequestId || !currentItemId) return
+      if (!regions.length) {
         const detector = await languageDetectorPromise
         destroyLanguageDetector(detector)
         languageDetectorPromise = undefined
@@ -282,16 +294,16 @@ export function useImageTranslation(options: UseImageTranslationOptions = {}) {
         destroyLanguageDetector(detector)
         return
       }
-      const sourceLanguage = await detectSourceLanguage(
-        message.regions,
+      const sourceLanguage = await engine.detectSourceLanguage(
+        regions,
         detector,
         translationController?.signal,
       )
       if (message.requestId !== activeRequestId || !currentItemId) return
 
-      const availability = await getTranslationAvailability(sourceLanguage)
+      const availability = await engine.getAvailability(sourceLanguage, translationController?.signal)
       if (isTranslationUnavailable(availability)) {
-        throw new Error('이 Chrome에서는 해당 언어의 내장 한국어 번역 기능을 사용할 수 없습니다.')
+        throw new Error(engine.unavailableMessage)
       }
 
       pendingTranslation = {
@@ -301,7 +313,7 @@ export function useImageTranslation(options: UseImageTranslationOptions = {}) {
         persistResult: activeRequestPersistsResult,
         imageWidth: message.imageWidth,
         imageHeight: message.imageHeight,
-        regions: message.regions,
+        regions,
         sourceLanguage,
       }
 
@@ -313,7 +325,7 @@ export function useImageTranslation(options: UseImageTranslationOptions = {}) {
       statusVisible.value = true
       progress.value = {
         phase: 'awaiting-translation',
-        message: 'Chrome 한국어 번역 모델을 받으려면 번역 계속을 눌러주세요.',
+        message: engine.downloadMessage,
       }
     } catch (error) {
       if (error instanceof DOMException && error.name === 'AbortError') return
@@ -426,7 +438,7 @@ export function useImageTranslation(options: UseImageTranslationOptions = {}) {
     activeRequestItem = item
     activeRequestPersistsResult = persistResult
     translationController = new AbortController()
-    languageDetectorPromise = prepareLanguageDetector(
+    languageDetectorPromise = engine.prepareLanguageDetector(
       (nextProgress) => {
         if (requestId === activeRequestId) progress.value = nextProgress
       },
@@ -442,6 +454,7 @@ export function useImageTranslation(options: UseImageTranslationOptions = {}) {
       type: 'analyze-image',
       requestId,
       file: item.file,
+      ocrEngine,
     }
     getWorker().postMessage(message)
   }
@@ -481,14 +494,21 @@ export function useImageTranslation(options: UseImageTranslationOptions = {}) {
       }
     }
 
-    if (!isChromeTranslatorSupported()) {
+    engine = createTranslationEngine(options.getEngine?.() ?? 'chrome', options.getAppleModel?.())
+    ocrEngine = options.getOcrEngine?.() ?? 'baberu'
+    try {
+      await engine.assertReady()
+      if (ocrEngine === 'apple-vision') await checkAppleOcr()
+    } catch (error) {
+      if (sequence !== startSequence || currentItemId !== item.id) return
       statusVisible.value = true
       progress.value = {
         phase: 'error',
-        message: '이미지 번역에는 Chrome 138 이상 데스크톱 버전의 내장 번역 기능이 필요합니다.',
+        message: error instanceof Error ? error.message : '번역기를 준비하지 못했습니다.',
       }
       return
     }
+    if (sequence !== startSequence || currentItemId !== item.id) return
 
     startAnalysis(item, persistResult)
   }

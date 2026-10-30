@@ -86,7 +86,7 @@ function getRegionStyle(region: ImageTranslationRegion): CSSProperties {
     text-align: center;
     text-wrap: balance;
     overflow-wrap: anywhere;
-    white-space: pre-wrap;
+    white-space: normal;
     background: rgb(255 255 255 / 94%);
     border: 1px solid rgb(0 0 0 / 28%);
     box-shadow: 0 1px 3px rgb(0 0 0 / 24%);

@@ -22,7 +22,7 @@
     "service_worker": "background.js",
     "type": "module"
   },
-  "permissions": ["storage", "unlimitedStorage"],
+  "permissions": ["storage", "unlimitedStorage", "nativeMessaging"],
   "host_permissions": [
     "https://huggingface.co/*",
     "https://*.huggingface.co/*",

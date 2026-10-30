@@ -2,10 +2,8 @@ import { computed, onBeforeUnmount, reactive } from 'vue'
 
 import { createAttentionSound } from '@/services/attentionSound'
 import { ImageTranslationRunner } from '@/services/imageTranslation/imageTranslationRunner'
-import {
-  isChromeTranslatorSupported,
-  type SupportedSourceLanguage,
-} from '@/services/imageTranslation/chromeTranslator'
+import type { SupportedSourceLanguage } from '@/services/imageTranslation/chromeTranslator'
+import type { AppleTranslationModel, OcrEngineId, TranslationEngineId } from '@/types/translationEngine'
 import type {
   BatchTranslationRun,
   BatchTranslationState,
@@ -52,7 +50,11 @@ function describeError(error: unknown, fallback: string): string {
   return error instanceof Error && error.message ? error.message : fallback
 }
 
-export function useBatchImageTranslation() {
+export function useBatchImageTranslation(
+  getEngine: () => TranslationEngineId = () => 'chrome',
+  getAppleModel: () => AppleTranslationModel = () => 'low-latency',
+  getOcrEngine: () => OcrEngineId = () => 'baberu',
+) {
   const state = reactive<BatchTranslationState>(createInitialState())
   const active = computed(() => ACTIVE_PHASES.has(state.phase))
   const attentionSound = createAttentionSound()
@@ -84,7 +86,7 @@ export function useBatchImageTranslation() {
     signal: AbortSignal,
   ): Promise<void> {
     state.phase = 'awaiting-translation'
-    state.message = `${sourceLanguage.toUpperCase()} → 한국어 번역 모델을 받으려면 ‘번역 모델 받기’ 버튼을 눌러주세요.`
+    state.message = `${sourceLanguage.toUpperCase()} → 한국어: ${runner?.engine.downloadMessage ?? ''}`
     attentionSound.play()
     return new Promise<void>((resolve, reject) => {
       const handleAbort = (): void => {
@@ -170,20 +172,13 @@ export function useBatchImageTranslation() {
     pauseRequested = false
     stopRequested = false
     controller = new AbortController()
-    runner = new ImageTranslationRunner()
-    if (!isChromeTranslatorSupported()) {
-      state.phase = 'error'
-      state.message = '이미지 번역에는 Chrome 138 이상 데스크톱 버전의 내장 번역 기능이 필요합니다.'
-      runner.dispose()
-      runner = undefined
-      controller = undefined
-      return
-    }
+    runner = new ImageTranslationRunner(getEngine(), getAppleModel(), getOcrEngine())
     attentionSound.prepare()
     state.phase = 'requesting-permission'
     state.message = '번역 결과를 저장할 폴더 권한을 확인하는 중입니다.'
 
     try {
+      await runner.assertReady(controller.signal)
       const permissionGranted = await run.requestPermission()
       if (sequence !== runSequence) return
       if (stopRequested) {

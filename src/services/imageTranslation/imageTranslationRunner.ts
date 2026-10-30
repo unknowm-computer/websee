@@ -1,13 +1,11 @@
 import {
-  detectSourceLanguage,
-  getTranslationAvailability,
-  isChromeTranslatorSupported,
   isTranslationImmediatelyAvailable,
   isTranslationUnavailable,
-  prepareLanguageDetector,
-  translateRecognizedRegions,
   type SupportedSourceLanguage,
 } from '@/services/imageTranslation/chromeTranslator'
+import { createTranslationEngine, type TranslationEngine } from '@/services/imageTranslation/translationEngine'
+import { checkAppleOcr, recognizeAppleRegions } from '@/services/imageTranslation/appleOcr'
+import type { AppleTranslationModel, OcrEngineId, TranslationEngineId } from '@/types/translationEngine'
 import type {
   ImageTranslationProgress,
   ImageTranslationResult,
@@ -15,11 +13,7 @@ import type {
   ImageTranslationWorkerResponse,
 } from '@/types/imageTranslation'
 
-interface AnalysisResult {
-  imageHeight: number
-  imageWidth: number
-  regions: Extract<ImageTranslationWorkerResponse, { type: 'result' }>['regions']
-}
+type AnalysisResult = Extract<ImageTranslationWorkerResponse, { type: 'result' | 'detection-result' }>
 
 interface PendingAnalysis {
   abort: () => void
@@ -40,6 +34,21 @@ function createAbortError(): DOMException {
 }
 
 export class ImageTranslationRunner {
+  readonly engine: TranslationEngine
+
+  constructor(
+    engine: TranslationEngineId = 'chrome',
+    appleModel: AppleTranslationModel = 'low-latency',
+    readonly ocrEngine: OcrEngineId = 'baberu',
+  ) {
+    this.engine = createTranslationEngine(engine, appleModel)
+  }
+
+  async assertReady(signal?: AbortSignal): Promise<void> {
+    await this.engine.assertReady(signal)
+    if (this.ocrEngine === 'apple-vision') await checkAppleOcr(signal)
+  }
+
   private pendingAnalysis: PendingAnalysis | undefined
   private requestSequence = 0
   private worker: Worker | undefined
@@ -73,11 +82,7 @@ export class ImageTranslationRunner {
       pending.reject(new Error(message.message))
       return
     }
-    pending.resolve({
-      imageWidth: message.imageWidth,
-      imageHeight: message.imageHeight,
-      regions: message.regions,
-    })
+    pending.resolve(message)
   }
 
   private readonly handleWorkerError = (event: ErrorEvent): void => {
@@ -120,6 +125,7 @@ export class ImageTranslationRunner {
         type: 'analyze-image',
         requestId,
         file,
+        ocrEngine: this.ocrEngine,
       }
       this.getWorker().postMessage(message)
     })
@@ -130,15 +136,15 @@ export class ImageTranslationRunner {
     itemId: string,
     options: ImageTranslationRunnerOptions,
   ): Promise<ImageTranslationResult> {
-    if (!isChromeTranslatorSupported()) {
-      throw new Error('이미지 번역에는 Chrome 138 이상 데스크톱 버전의 내장 번역 기능이 필요합니다.')
-    }
-
-    const detectorPromise = prepareLanguageDetector(options.onProgress, options.signal)
+    await this.assertReady(options.signal)
+    const detectorPromise = this.engine.prepareLanguageDetector(options.onProgress, options.signal)
     let detectorConsumed = false
     try {
       const analysis = await this.analyze(file, options.onProgress, options.signal)
-      if (!analysis.regions.length) {
+      const recognizedRegions = analysis.type === 'detection-result'
+        ? await recognizeAppleRegions(file, analysis.candidates, options.onProgress, options.signal)
+        : analysis.regions
+      if (!recognizedRegions.length) {
         const detector = await detectorPromise
         detector?.destroy()
         detectorConsumed = true
@@ -156,21 +162,21 @@ export class ImageTranslationRunner {
       })
       const detector = await detectorPromise
       detectorConsumed = true
-      const sourceLanguage = await detectSourceLanguage(
-        analysis.regions,
+      const sourceLanguage = await this.engine.detectSourceLanguage(
+        recognizedRegions,
         detector,
         options.signal,
       )
-      const availability = await getTranslationAvailability(sourceLanguage)
+      const availability = await this.engine.getAvailability(sourceLanguage, options.signal)
       if (isTranslationUnavailable(availability)) {
-        throw new Error('이 Chrome에서는 해당 언어의 내장 한국어 번역 기능을 사용할 수 없습니다.')
+        throw new Error(this.engine.unavailableMessage)
       }
       if (!isTranslationImmediatelyAvailable(availability)) {
         await options.waitForTranslationStart(sourceLanguage)
       }
 
-      const regions = await translateRecognizedRegions(
-        analysis.regions,
+      const regions = await this.engine.translate(
+        recognizedRegions,
         sourceLanguage,
         options.onProgress,
         options.signal,

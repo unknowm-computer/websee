@@ -10,6 +10,7 @@ import {
   type TranslationModelAsset,
 } from '@/services/imageTranslation/modelManifest'
 import type {
+  AnalyzeImageRequest,
   ImageTranslationProgress,
   ImageTranslationWorkerRequest,
   ImageTranslationWorkerResponse,
@@ -145,7 +146,7 @@ async function recognizeRegions(
   return regions
 }
 
-async function analyzeImage(requestId: number, file: File): Promise<void> {
+async function analyzeImage({ requestId, file, ocrEngine }: AnalyzeImageRequest): Promise<void> {
   if (modelIdleTimer !== undefined) clearTimeout(modelIdleTimer)
   modelIdleTimer = undefined
   activeController?.abort()
@@ -170,6 +171,16 @@ async function analyzeImage(requestId: number, file: File): Promise<void> {
     })
     const candidates = await layoutDetector.detect(bitmap)
     assertActive(requestId)
+    if (ocrEngine === 'apple-vision') {
+      workerScope.postMessage({
+        type: 'detection-result',
+        requestId,
+        imageWidth: bitmap.width,
+        imageHeight: bitmap.height,
+        candidates,
+      })
+      return
+    }
     const regions = await recognizeRegions(
       requestId,
       bitmap,
@@ -227,7 +238,7 @@ workerScope.onmessage = (event): void => {
     }
     analysisQueue = analysisQueue
       .catch(() => undefined)
-      .then(() => analyzeImage(message.requestId, message.file))
+      .then(() => analyzeImage(message))
     return
   }
 

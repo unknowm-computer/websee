@@ -3,9 +3,11 @@ import { computed } from 'vue'
 
 import SvgIcon from '@/components/common/SvgIcon.vue'
 import type { BatchTranslationState } from '@/types/batchTranslation'
+import type { TranslationEngineId } from '@/types/translationEngine'
 
 interface Props {
   state: BatchTranslationState
+  translationEngine: TranslationEngineId
 }
 
 const props = defineProps<Props>()
@@ -38,7 +40,7 @@ const processedLabel = computed(() => {
 })
 
 function handleAction(): void {
-  if (requiresAction.value) {
+  if (requiresAction.value && props.translationEngine === 'chrome') {
     emit('continue')
     return
   }
@@ -64,7 +66,7 @@ function handleAction(): void {
       :class="{ 'is-primary': requiresAction }"
       @click="handleAction"
     >
-      {{ requiresAction ? '모델 받기' : '열기' }}
+      {{ requiresAction ? translationEngine === 'apple' ? '준비 안내' : '모델 받기' : '열기' }}
     </button>
     <div class="batch-translation-mini-status__progress">
       <progress

@@ -1,3 +1,5 @@
+import type { OcrEngineId } from './translationEngine'
+
 export type ImageTranslationPhase =
   | 'idle'
   | 'preparing'
@@ -25,6 +27,14 @@ export interface RecognizedTextRegion {
   detectionScore: number
 }
 
+export interface TextRegionCandidate {
+  id: string
+  kind: TranslationRegionKind
+  bounds: ImageBounds
+  cropBounds: ImageBounds
+  detectionScore: number
+}
+
 export interface ImageTranslationRegion extends RecognizedTextRegion {
   translatedText: string
 }
@@ -47,6 +57,7 @@ export interface AnalyzeImageRequest {
   type: 'analyze-image'
   requestId: number
   file: File
+  ocrEngine: OcrEngineId
 }
 
 export interface CancelImageAnalysisRequest {
@@ -83,7 +94,16 @@ export interface ImageAnalysisErrorResponse {
   message: string
 }
 
+export interface ImageDetectionResultResponse {
+  type: 'detection-result'
+  requestId: number
+  imageWidth: number
+  imageHeight: number
+  candidates: TextRegionCandidate[]
+}
+
 export type ImageTranslationWorkerResponse =
   | ImageAnalysisProgressResponse
   | ImageAnalysisResultResponse
+  | ImageDetectionResultResponse
   | ImageAnalysisErrorResponse

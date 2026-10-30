@@ -3,7 +3,9 @@ import {
   getOnnxRuntime,
 } from '@/services/imageTranslation/onnxRuntime'
 import { createDetectorTargetSize } from '@/services/imageTranslation/detectorGeometry'
-import type { ImageBounds, TranslationRegionKind } from '@/types/imageTranslation'
+import type { ImageBounds, TextRegionCandidate, TranslationRegionKind } from '@/types/imageTranslation'
+
+export type { TextRegionCandidate } from '@/types/imageTranslation'
 
 const INPUT_SIZE = 640
 const DETECTION_THRESHOLD = 0.35
@@ -13,14 +15,6 @@ interface RawDetection {
   label: number
   score: number
   bounds: ImageBounds
-}
-
-export interface TextRegionCandidate {
-  id: string
-  kind: TranslationRegionKind
-  bounds: ImageBounds
-  cropBounds: ImageBounds
-  detectionScore: number
 }
 
 function clamp(value: number, minimum: number, maximum: number): number {
