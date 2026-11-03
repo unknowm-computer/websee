@@ -354,7 +354,7 @@ onMounted(async () => {
     aria-label="텍스트 상세보기"
     @keydown="handleKeydown"
   >
-    <header class="text-viewer__toolbar">
+    <header class="text-viewer__toolbar notranslate" translate="no">
       <strong :title="item.path">{{ item.name }}</strong>
       <div class="text-viewer__actions">
         <select
@@ -431,26 +431,28 @@ onMounted(async () => {
       </div>
     </header>
 
-    <div v-if="loading" class="text-viewer__state">
+    <div v-if="loading" class="text-viewer__state notranslate" translate="no">
       <SvgIcon name="refresh" :size="36" class="is-loading" />
       <strong>텍스트를 읽는 중입니다...</strong>
     </div>
-    <div v-else-if="errorMessage" class="text-viewer__state">
+    <div v-else-if="errorMessage" class="text-viewer__state notranslate" translate="no">
       <SvgIcon name="docs" :size="36" />
       <strong>{{ errorMessage }}</strong>
     </div>
     <TextEditor
       v-else-if="editing"
+      class="notranslate"
+      translate="no"
       :model-value="editedText"
       :format="editorFormat"
       @activity-status="updateEditorActivityStatus"
       @update:model-value="updateEditedText"
     />
-    <pre v-else ref="contentElement" class="text-viewer__content">{{
+    <pre v-else ref="contentElement" class="text-viewer__content" translate="yes">{{
       content?.text
     }}</pre>
 
-    <footer>
+    <footer class="notranslate" translate="no">
       <span>{{ formatBytes(item.size) }}</span>
       <span>{{ item.format }}</span>
       <span>{{ content?.encoding ?? "인코딩 확인 중" }}</span>

@@ -47,19 +47,19 @@ watch(
 
 <template>
   <section class="text-preview-pane" aria-label="선택한 텍스트 미리보기">
-    <header>미리보기</header>
+    <header class="notranslate" translate="no">미리보기</header>
 
-    <div v-if="loading" class="text-preview-pane__state">
+    <div v-if="loading" class="text-preview-pane__state notranslate" translate="no">
       <SvgIcon name="refresh" :size="28" class="is-loading" />
       <small>텍스트를 읽는 중입니다...</small>
     </div>
-    <div v-else-if="errorMessage" class="text-preview-pane__state">
+    <div v-else-if="errorMessage" class="text-preview-pane__state notranslate" translate="no">
       <SvgIcon name="docs" :size="28" />
       <small>{{ errorMessage }}</small>
     </div>
-    <pre v-else class="text-preview-pane__body">{{ content?.text }}</pre>
+    <pre v-else class="text-preview-pane__body" translate="yes">{{ content?.text }}</pre>
 
-    <footer>
+    <footer class="notranslate" translate="no">
       <strong :title="item.path">{{ item.name }}</strong>
       <span>
         {{ content?.encoding ?? '인코딩 확인 중' }}

@@ -1761,6 +1761,8 @@ onBeforeUnmount(() => {
     @drop.prevent="handleDrop"
   >
     <AppToolbar
+      class="notranslate"
+      translate="no"
       :batch-active="batchTranslationActive"
       :can-batch-translate="canBatchTranslate"
       :can-refresh="canRefreshCollection"
@@ -1790,7 +1792,8 @@ onBeforeUnmount(() => {
     >
       <div class="media-browser__sidebar">
         <FolderTree
-          class="media-browser__tree"
+          class="media-browser__tree notranslate"
+          translate="no"
           :tree="collection.tree"
           :selected-id="selectedTreeNodeId"
           :expand-id="requestedExpandedTreeNodeId"
@@ -1820,6 +1823,8 @@ onBeforeUnmount(() => {
         />
         <ImagePreviewPane
           v-else
+          class="notranslate"
+          translate="no"
           :item="selectedBrowserItem"
           :get-url="getUrl"
           :archive-entry-ready="selectedBrowserItem?.id === archivePreviewItemId"
@@ -1848,7 +1853,8 @@ onBeforeUnmount(() => {
 
       <div
         v-if="browserItems.length"
-        class="media-browser__content"
+        class="media-browser__content notranslate"
+        translate="no"
       >
         <ThumbnailGrid
           v-if="viewMode === 'grid'"
@@ -1872,7 +1878,7 @@ onBeforeUnmount(() => {
         />
       </div>
 
-      <div v-else class="media-browser__empty-folder">
+      <div v-else class="media-browser__empty-folder notranslate" translate="no">
         <SvgIcon name="folder" :size="42" />
         <strong>이 폴더에는 지원하는 이미지, 텍스트나 압축파일이 없습니다.</strong>
         <p>왼쪽 폴더 트리에서 파일이 있는 폴더를 선택하세요.</p>
@@ -1882,6 +1888,8 @@ onBeforeUnmount(() => {
     <section v-else class="empty-workspace" aria-label="열린 이미지 없음" />
 
     <StatusBar
+      class="notranslate"
+      translate="no"
       :item="selectedBrowserItem"
       :image-count="statusImageCount"
       :item-path="selectedStatusPath"
@@ -1916,11 +1924,11 @@ onBeforeUnmount(() => {
       @change="handleArchiveSelection"
     />
 
-    <div v-if="dragActive" class="drop-overlay">
+    <div v-if="dragActive" class="drop-overlay notranslate" translate="no">
       <div><strong>여기에 놓아서 열기</strong><span>폴더, 이미지, 텍스트 또는 압축파일</span></div>
     </div>
 
-    <div v-if="loading" class="loading-overlay" role="status">
+    <div v-if="loading" class="loading-overlay notranslate" translate="no" role="status">
       <div class="loading-overlay__dialog">
         <div class="loading-overlay__spinner" aria-hidden="true" />
         <strong>{{ loadingMessage }}</strong>
@@ -1928,7 +1936,7 @@ onBeforeUnmount(() => {
       </div>
     </div>
 
-    <div v-if="errorMessage" class="error-toast" role="alert">
+    <div v-if="errorMessage" class="error-toast notranslate" translate="no" role="alert">
       <strong>열기 오류</strong>
       <span>{{ errorMessage }}</span>
       <button type="button" aria-label="오류 메시지 닫기" @click="errorMessage = ''">
@@ -1938,6 +1946,8 @@ onBeforeUnmount(() => {
 
     <BatchTranslationMiniStatus
       v-if="batchTranslationActive && !batchTranslationDialogOpen"
+      class="notranslate"
+      translate="no"
       :state="batchTranslationState"
       :translation-engine="translationEngine"
       @continue="continueBatchTranslation"
@@ -1946,6 +1956,8 @@ onBeforeUnmount(() => {
 
     <ImageViewer
       v-if="viewerOpen && viewerCurrentId"
+      class="notranslate"
+      translate="no"
       :items="viewerItems"
       :current-id="viewerCurrentId"
       :get-url="getUrl"
@@ -1973,9 +1985,11 @@ onBeforeUnmount(() => {
       @saved="handleTextFileSaved"
     />
 
-    <HelpDialog v-if="helpOpen" @close="helpOpen = false" />
+    <HelpDialog v-if="helpOpen" class="notranslate" translate="no" @close="helpOpen = false" />
     <OptionsDialog
       v-if="optionsOpen"
+      class="notranslate"
+      translate="no"
       :file-list-columns="fileListColumns"
       :slideshow-preference="viewerSlideshowPreference"
       :translation-enabled="translationEnabled"
@@ -1994,6 +2008,8 @@ onBeforeUnmount(() => {
     />
     <BatchTranslationDialog
       v-if="batchTranslationDialogOpen"
+      class="notranslate"
+      translate="no"
       :archive-count="batchArchiveCount"
       :translation-engine="translationEngine"
       :directory-handle="directoryHandleCache.get(selectedDirectory)"
