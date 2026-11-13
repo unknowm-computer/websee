@@ -69,16 +69,23 @@ describe('page translation boundaries', () => {
   })
 
   it.each([
-    '../src/components/viewer/TextViewer.vue',
-    '../src/components/browser/TextPreviewPane.vue',
-  ])('allows reading text but protects toolbar and filename in %s', (path) => {
+    ['../src/components/viewer/TextViewer.vue', '../src/components/viewer/TextViewer.vue'],
+    ['../src/components/browser/TextPreviewPane.vue', '../src/components/common/PreviewPane.vue'],
+  ])('allows reading text but protects toolbar and filename in %s', (path, framePath) => {
     const elements = readElements(path)
     const body = elements.find(({ node }) => node.tag === 'pre')
     expect(body).toBeDefined()
     expect(body && attribute(body.node, 'translate')).toBe('yes')
     expect(body?.ancestors.some(blocksTranslation)).toBe(false)
+    const frame = readElements(framePath)
+    if (framePath !== path) {
+      expect(body?.ancestors.some((node) => node.tag === 'PreviewPane')).toBe(true)
+      const slot = frame.find(({ node }) => node.tag === 'slot' && !attribute(node, 'name'))
+      expect(slot).toBeDefined()
+      expect(slot?.ancestors.some(blocksTranslation)).toBe(false)
+    }
     for (const tag of ['header', 'footer']) {
-      const element = elements.find(({ node }) => node.tag === tag)
+      const element = frame.find(({ node }) => node.tag === tag)
       expect(element, tag).toBeDefined()
       expect(element && blocksTranslation(element.node), tag).toBe(true)
     }

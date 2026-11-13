@@ -380,6 +380,7 @@ onMounted(async () => {
         <template v-if="editing">
           <button
             v-if="hasOriginalFileHandle"
+            class="action-button"
             type="button"
             title="저장 (Cmd/Ctrl+S)"
             aria-label="저장"
@@ -389,6 +390,7 @@ onMounted(async () => {
             <SvgIcon name="save" :size="18" />
           </button>
           <button
+            class="action-button"
             type="button"
             title="다른 이름으로 저장"
             aria-label="다른 이름으로 저장"
@@ -398,6 +400,7 @@ onMounted(async () => {
             <SvgIcon name="save-as" :size="18" />
           </button>
           <button
+            class="action-button"
             type="button"
             title="편집 취소"
             aria-label="편집 취소"
@@ -409,6 +412,7 @@ onMounted(async () => {
         </template>
         <button
           v-else
+          class="action-button"
           type="button"
           aria-label="편집"
           :disabled="!canEdit"
@@ -422,6 +426,7 @@ onMounted(async () => {
           <SvgIcon name="edit" :size="18" />
         </button>
         <button
+          class="action-button"
           type="button"
           aria-label="텍스트 상세보기 닫기"
           @click="requestClose"
@@ -432,7 +437,7 @@ onMounted(async () => {
     </header>
 
     <div v-if="loading" class="text-viewer__state notranslate" translate="no">
-      <SvgIcon name="refresh" :size="36" class="is-loading" />
+      <SvgIcon name="refresh" :size="36" class="loading-spin" />
       <strong>텍스트를 읽는 중입니다...</strong>
     </div>
     <div v-else-if="errorMessage" class="text-viewer__state notranslate" translate="no">
@@ -453,10 +458,10 @@ onMounted(async () => {
     }}</pre>
 
     <footer class="notranslate" translate="no">
-      <span>{{ formatBytes(item.size) }}</span>
-      <span>{{ item.format }}</span>
-      <span>{{ content?.encoding ?? "인코딩 확인 중" }}</span>
-      <div class="text-viewer__status">
+      <span class="status-cell">{{ formatBytes(item.size) }}</span>
+      <span class="status-cell">{{ item.format }}</span>
+      <span class="status-cell">{{ content?.encoding ?? "인코딩 확인 중" }}</span>
+      <div class="status-cell text-viewer__status">
         <span v-if="saveMessage" class="text-viewer__save-message">{{
           saveMessage
         }}</span>
@@ -509,8 +514,6 @@ onMounted(async () => {
 
   &__encoding {
     height: 27px;
-    background: var(--color-light);
-    border: 1px solid var(--color-shadow-dark);
   }
 
   &__actions button {
@@ -519,21 +522,7 @@ onMounted(async () => {
     width: 28px;
     height: 27px;
     padding: 0;
-    color: inherit;
     place-items: center;
-    background: var(--color-face);
-    border: 1px solid;
-    border-color: var(--color-light) var(--color-shadow-dark)
-      var(--color-shadow-dark) var(--color-light);
-
-    &:active:not(:disabled) {
-      border-color: var(--color-shadow-dark) var(--color-light)
-        var(--color-light) var(--color-shadow-dark);
-    }
-
-    &:disabled {
-      color: var(--color-disabled);
-    }
   }
 
   &__content {
@@ -561,10 +550,6 @@ onMounted(async () => {
     justify-content: center;
     color: var(--color-muted);
     background: #fff;
-
-    .is-loading {
-      animation: text-viewer-spin 0.8s linear infinite;
-    }
   }
 
   footer {
@@ -575,13 +560,6 @@ onMounted(async () => {
 
     > span {
       min-width: 90px;
-      padding: 3px 7px;
-      overflow: hidden;
-      text-overflow: ellipsis;
-      white-space: nowrap;
-      border: 1px solid;
-      border-color: var(--color-shadow) var(--color-light) var(--color-light)
-        var(--color-shadow);
     }
   }
 
@@ -591,13 +569,7 @@ onMounted(async () => {
     gap: 6px;
     justify-content: flex-end;
     min-width: 0;
-    padding: 3px 7px;
-    overflow: hidden;
     text-align: right;
-    white-space: nowrap;
-    border: 1px solid;
-    border-color: var(--color-shadow) var(--color-light) var(--color-light)
-      var(--color-shadow);
 
     > span {
       min-width: 0;
@@ -614,12 +586,6 @@ onMounted(async () => {
 
   &__save-message {
     color: var(--color-selection-dark);
-  }
-}
-
-@keyframes text-viewer-spin {
-  to {
-    rotate: 360deg;
   }
 }
 </style>

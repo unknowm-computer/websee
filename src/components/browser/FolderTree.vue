@@ -109,7 +109,7 @@ watch(
 
 <template>
   <aside class="folder-tree" aria-label="폴더 및 압축파일 탐색">
-    <div class="folder-tree__title">탐색</div>
+    <div class="pane-heading">탐색</div>
     <div
       ref="scrollContainer"
       class="folder-tree__scroll"
@@ -137,16 +137,6 @@ watch(
   height: 100%;
   background: #fff;
   border-right: 1px solid var(--color-shadow-dark);
-
-  &__title {
-    display: flex;
-    align-items: center;
-    padding: 0 8px;
-    font-weight: 700;
-    background: var(--color-face);
-    border-bottom: 1px solid var(--color-shadow-dark);
-    box-shadow: inset 0 1px var(--color-light);
-  }
 
   &__scroll {
     min-height: 0;

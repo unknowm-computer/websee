@@ -45,20 +45,21 @@ const progressPercent = computed(() => {
       {{ progressPercent }}%
     </span>
     <div class="image-translation-status__actions">
-      <button v-if="processing" type="button" @click="emit('cancel')">
+      <button v-if="processing" class="action-button" type="button" @click="emit('cancel')">
         취소
       </button>
-      <button v-if="progress.phase === 'error'" type="button" @click="emit('retry')">
+      <button v-if="progress.phase === 'error'" class="action-button" type="button" @click="emit('retry')">
         다시 시도
       </button>
       <button
         v-if="progress.phase === 'awaiting-translation'"
+        class="action-button"
         type="button"
         @click="emit('continue')"
       >
         번역 계속
       </button>
-      <button v-if="!processing" type="button" @click="emit('close')">
+      <button v-if="!processing" class="action-button" type="button" @click="emit('close')">
         닫기
       </button>
     </div>
@@ -66,6 +67,8 @@ const progressPercent = computed(() => {
 </template>
 
 <style lang="scss">
+@use '../../styles/surfaces';
+
 .image-translation-status {
   position: absolute;
   z-index: 2;
@@ -76,12 +79,7 @@ const progressPercent = computed(() => {
   gap: 7px 10px;
   width: min(390px, calc(100% - 24px));
   padding: 10px;
-  color: var(--color-window-text);
-  background: var(--color-face);
-  border: 1px solid;
-  border-color: var(--color-light) var(--color-shadow-dark) var(--color-shadow-dark)
-    var(--color-light);
-  box-shadow: 2px 2px 8px rgb(0 0 0 / 42%);
+  @include surfaces.raised-panel;
 
   strong,
   p,
@@ -115,17 +113,6 @@ const progressPercent = computed(() => {
 
     button {
       min-height: 28px;
-      padding: 3px 9px;
-      color: inherit;
-      background: var(--color-face);
-      border: 1px solid;
-      border-color: var(--color-light) var(--color-shadow-dark) var(--color-shadow-dark)
-        var(--color-light);
-
-      &:active {
-        border-color: var(--color-shadow-dark) var(--color-light) var(--color-light)
-          var(--color-shadow-dark);
-      }
     }
   }
 }

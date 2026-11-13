@@ -62,8 +62,9 @@ function handleAction(): void {
     />
     <strong>{{ statusTitle }}</strong>
     <button
+      class="action-button"
       type="button"
-      :class="{ 'is-primary': requiresAction }"
+      :class="{ 'action-button--primary': requiresAction }"
       @click="handleAction"
     >
       {{ requiresAction ? translationEngine === 'apple' ? '준비 안내' : '모델 받기' : '열기' }}
@@ -80,7 +81,11 @@ function handleAction(): void {
 </template>
 
 <style lang="scss">
+@use '../../styles/surfaces';
+
 .batch-translation-mini-status {
+  $panel-shadow: 3px 4px 12px rgb(0 0 0 / 34%);
+
   position: fixed;
   z-index: 170;
   right: 14px;
@@ -91,12 +96,7 @@ function handleAction(): void {
   align-items: center;
   width: min(320px, calc(100% - 28px));
   padding: 8px;
-  color: var(--color-window-text);
-  background: var(--color-face);
-  border: 1px solid;
-  border-color: var(--color-light) var(--color-shadow-dark) var(--color-shadow-dark)
-    var(--color-light);
-  box-shadow: 3px 4px 12px rgb(0 0 0 / 34%);
+  @include surfaces.raised-panel($panel-shadow);
 
   > .svg-icon {
     color: var(--color-icon);
@@ -105,17 +105,6 @@ function handleAction(): void {
   > button {
     min-height: 25px;
     padding: 2px 8px;
-    color: var(--color-window-text);
-    background: var(--color-face);
-    border: 1px solid;
-    border-color: var(--color-light) var(--color-shadow-dark) var(--color-shadow-dark)
-      var(--color-light);
-
-    &.is-primary {
-      font-weight: 700;
-      color: #fff;
-      background: var(--color-selection);
-    }
   }
 
   &__progress {
@@ -138,12 +127,12 @@ function handleAction(): void {
   }
 
   &.is-attention {
-    border-color: #a7832d;
-    box-shadow: 0 0 0 2px #fff7db, 3px 4px 12px rgb(0 0 0 / 34%);
+    border-color: var(--color-warning-border);
+    box-shadow: 0 0 0 2px var(--color-warning-surface), $panel-shadow;
 
     > .svg-icon,
     > strong {
-      color: #805d09;
+      color: var(--color-warning);
     }
   }
 }

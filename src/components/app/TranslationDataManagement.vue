@@ -136,6 +136,7 @@ onBeforeUnmount(() => emit('busy-change', false))
         <span>{{ description }}</span>
         <div class="translation-data-management__actions">
           <button
+            class="action-button"
             type="button"
             :disabled="actionsDisabled || summary.orphanCount === 0"
             @click="requestAction('orphans')"
@@ -143,6 +144,7 @@ onBeforeUnmount(() => emit('busy-change', false))
             사용하지 않는 데이터 정리
           </button>
           <button
+            class="action-button"
             type="button"
             :disabled="actionsDisabled || summary.fileCount === 0"
             @click="requestAction('all')"
@@ -161,10 +163,10 @@ onBeforeUnmount(() => emit('busy-change', false))
         <strong id="translation-data-confirmation-title">삭제할까요?</strong>
         <span>{{ confirmationDescription }}</span>
         <div>
-          <button type="button" :disabled="deleting" @click="confirmAction">
+          <button class="action-button" type="button" :disabled="deleting" @click="confirmAction">
             {{ deleting ? '삭제 중' : '삭제' }}
           </button>
-          <button type="button" :disabled="deleting" @click="pendingAction = undefined">
+          <button class="action-button" type="button" :disabled="deleting" @click="pendingAction = undefined">
             취소
           </button>
         </div>
@@ -237,8 +239,8 @@ onBeforeUnmount(() => emit('busy-change', false))
     display: grid;
     gap: 7px;
     padding: 9px;
-    background: #fff7db;
-    border: 1px solid #a7832d;
+    background: var(--color-warning-surface);
+    border: 1px solid var(--color-warning-border);
 
     > div {
       display: flex;
@@ -248,10 +250,10 @@ onBeforeUnmount(() => emit('busy-change', false))
   }
 
   &__message {
-    color: #165e25;
+    color: var(--color-success);
 
     &.is-error {
-      color: #8e2424;
+      color: var(--color-error);
     }
   }
 

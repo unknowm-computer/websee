@@ -23,13 +23,15 @@ const emit = defineEmits<{
   >
     <SvgIcon name="translate" :size="20" />
     <span>{{ message }}</span>
-    <button type="button" aria-label="번역 안내 닫기" @click="emit('close')">
+    <button class="action-button" type="button" aria-label="번역 안내 닫기" @click="emit('close')">
       <SvgIcon name="close" :size="17" />
     </button>
   </aside>
 </template>
 
 <style lang="scss">
+@use '../../styles/surfaces';
+
 .image-translation-toast {
   position: absolute;
   z-index: 3;
@@ -41,24 +43,15 @@ const emit = defineEmits<{
   align-items: center;
   width: min(430px, calc(100% - 24px));
   padding: 9px 10px;
-  color: var(--color-window-text);
-  background: var(--color-face);
-  border: 1px solid;
-  border-color: var(--color-light) var(--color-shadow-dark) var(--color-shadow-dark)
-    var(--color-light);
-  box-shadow: 2px 2px 8px rgb(0 0 0 / 42%);
+  @include surfaces.raised-panel;
 
   button {
     display: grid;
     place-items: center;
     width: 24px;
     height: 24px;
+    min-height: 0;
     padding: 0;
-    color: inherit;
-    background: var(--color-face);
-    border: 1px solid;
-    border-color: var(--color-light) var(--color-shadow-dark) var(--color-shadow-dark)
-      var(--color-light);
   }
 }
 </style>

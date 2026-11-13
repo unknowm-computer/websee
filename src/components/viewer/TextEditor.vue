@@ -323,8 +323,7 @@ onBeforeUnmount(() => {
       vertical-align: middle;
       background: #fff;
       border: 1px solid;
-      border-color: var(--color-shadow-dark) var(--color-light) var(--color-light)
-        var(--color-shadow-dark);
+      border-color: var(--border-pressed);
       border-radius: 0;
     }
 
@@ -339,14 +338,12 @@ onBeforeUnmount(() => {
       vertical-align: middle;
       background: var(--color-face);
       border: 1px solid;
-      border-color: var(--color-light) var(--color-shadow-dark) var(--color-shadow-dark)
-        var(--color-light);
+      border-color: var(--border-raised);
       border-radius: 0;
 
       &:active {
         background: var(--color-pressed);
-        border-color: var(--color-shadow-dark) var(--color-light) var(--color-light)
-          var(--color-shadow-dark);
+        border-color: var(--border-pressed);
       }
     }
 
@@ -385,12 +382,10 @@ onBeforeUnmount(() => {
     place-items: center;
     background: var(--color-face);
     border: 1px solid;
-    border-color: var(--color-light) var(--color-shadow-dark) var(--color-shadow-dark)
-      var(--color-light);
+    border-color: var(--border-raised);
 
     &:active {
-      border-color: var(--color-shadow-dark) var(--color-light) var(--color-light)
-        var(--color-shadow-dark);
+      border-color: var(--border-pressed);
     }
   }
 

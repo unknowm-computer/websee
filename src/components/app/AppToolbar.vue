@@ -177,8 +177,7 @@ const emit = defineEmits<{
       padding-top: 3px;
       padding-bottom: 1px;
       background: var(--color-pressed);
-      border-color: var(--color-shadow-dark) var(--color-light)
-        var(--color-light) var(--color-shadow-dark);
+      border-color: var(--border-pressed);
     }
 
     &:disabled {
@@ -206,9 +205,6 @@ const emit = defineEmits<{
     select {
       width: 92px;
       height: 25px;
-      font: inherit;
-      background: #fff;
-      border: 1px solid var(--color-shadow-dark);
     }
   }
 

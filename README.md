@@ -110,3 +110,5 @@ npm run build
 - [ ] **Windows 내장 OCR 지원**: Windows용 Native Messaging 도우미를 추가해 기존 영역 감지 및 Chrome 내장 번역과 연결합니다. 일반 PC의 `Windows.Media.Ocr`를 우선 검토하고, 지원되는 Copilot+ PC에서는 Windows AI OCR도 검토합니다.
 
 현재 Windows 테스트 PC가 없어 구현은 보류합니다. 테스트 환경을 확보한 뒤 설치·패키징·언어팩 처리, 영어·일본어·중국어 인식률과 속도, 개별·일괄 번역 및 취소 동작을 검증한 후 지원을 추가합니다.
+
+- [ ] **macOS Vision 사전 초기화**. macOS Vision을 사용하는 경우 WebSee 화면이 열린 뒤 백그라운드에서 샘플 OCR을 실행하고, 실제 인식에서 같은 도우미 프로세스를 재사용하는 방안을 검토합니다. 화면 로딩과 조작에 영향을 주지 않으면서 첫 OCR 대기 시간이 줄어드는지 확인합니다.

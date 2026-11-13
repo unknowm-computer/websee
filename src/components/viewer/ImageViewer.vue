@@ -1191,10 +1191,10 @@ onBeforeUnmount(() => {
     </div>
 
     <footer v-if="currentItem" class="image-viewer__status">
-      <span :title="currentItem.path">{{ currentItem.name }}</span>
-      <span>{{ formatBytes(currentItem.size) }}</span>
-      <span>{{ currentItem.format }}</span>
-      <span>
+      <span class="status-cell" :title="currentItem.path">{{ currentItem.name }}</span>
+      <span class="status-cell">{{ formatBytes(currentItem.size) }}</span>
+      <span class="status-cell">{{ currentItem.format }}</span>
+      <span class="status-cell">
         {{
           currentItem.width && currentItem.height
             ? `${currentItem.width} × ${currentItem.height}`
@@ -1248,15 +1248,13 @@ onBeforeUnmount(() => {
       color: inherit;
       background: var(--color-face);
       border: 1px solid;
-      border-color: var(--color-light) var(--color-shadow-dark)
-        var(--color-shadow-dark) var(--color-light);
+      border-color: var(--border-raised);
 
       &:active,
       &.is-pressed {
         padding: 4px 8px 2px 10px;
         background: var(--color-pressed);
-        border-color: var(--color-shadow-dark) var(--color-light)
-          var(--color-light) var(--color-shadow-dark);
+        border-color: var(--border-pressed);
       }
 
       &:disabled {
@@ -1282,8 +1280,7 @@ onBeforeUnmount(() => {
     color: var(--color-window-text);
     background: var(--color-face);
     border: 1px solid;
-    border-color: var(--color-light) var(--color-shadow-dark)
-      var(--color-shadow-dark) var(--color-light);
+    border-color: var(--border-raised);
     box-shadow: 3px 4px 10px rgb(0 0 0 / 42%);
 
     button {
@@ -1418,15 +1415,13 @@ onBeforeUnmount(() => {
       color: var(--color-window-text);
       background: var(--color-face);
       border: 1px solid;
-      border-color: var(--color-light) var(--color-shadow-dark)
-        var(--color-shadow-dark) var(--color-light);
+      border-color: var(--border-raised);
       box-shadow: 2px 2px 8px rgb(0 0 0 / 42%);
 
       &.is-pressed {
         padding: 5px 9px 3px 11px;
         background: var(--color-pressed);
-        border-color: var(--color-shadow-dark) var(--color-light)
-          var(--color-light) var(--color-shadow-dark);
+        border-color: var(--border-pressed);
       }
     }
   }
@@ -1440,15 +1435,9 @@ onBeforeUnmount(() => {
     color: var(--color-window-text);
     background: var(--color-face);
 
-    span {
+    > .status-cell {
       min-width: 90px;
-      padding: 3px 8px;
-      overflow: hidden;
-      text-overflow: ellipsis;
-      white-space: nowrap;
-      border: 1px solid;
-      border-color: var(--color-shadow) var(--color-light) var(--color-light)
-        var(--color-shadow);
+      padding-inline: 8px;
     }
   }
 }

@@ -1637,6 +1637,8 @@ function handleBrowserKeydown(event: KeyboardEvent): void {
     return
   }
 
+  if (helpOpen.value || optionsOpen.value || batchTranslationDialogOpen.value) return
+
   const target = event.target
   if (target instanceof HTMLInputElement || target instanceof HTMLSelectElement) return
   if (
@@ -1660,21 +1662,6 @@ function handleBrowserKeydown(event: KeyboardEvent): void {
     }
     return
   }
-
-  if (optionsOpen.value) {
-    if (event.key === 'Escape') optionsOpen.value = false
-    return
-  }
-
-  if (batchTranslationDialogOpen.value) {
-    if (event.key === 'Escape') {
-      event.preventDefault()
-      if (!batchTranslationActive.value) batchTranslationDialogOpen.value = false
-    }
-    return
-  }
-
-  if (helpOpen.value) return
 
   if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'o') {
     event.preventDefault()
@@ -1930,7 +1917,7 @@ onBeforeUnmount(() => {
 
     <div v-if="loading" class="loading-overlay notranslate" translate="no" role="status">
       <div class="loading-overlay__dialog">
-        <div class="loading-overlay__spinner" aria-hidden="true" />
+        <div class="loading-overlay__spinner loading-spin" aria-hidden="true" />
         <strong>{{ loadingMessage }}</strong>
         <span>이미지 수에 따라 잠시 걸릴 수 있습니다.</span>
       </div>
@@ -2196,8 +2183,7 @@ onBeforeUnmount(() => {
     padding: 18px;
     background: var(--color-face);
     border: 1px solid;
-    border-color: var(--color-light) var(--color-shadow-dark) var(--color-shadow-dark)
-      var(--color-light);
+    border-color: var(--border-raised);
     box-shadow: 4px 5px 13px rgb(0 0 0 / 30%);
 
     > span {
@@ -2214,7 +2200,6 @@ onBeforeUnmount(() => {
     border: 3px solid #aebbd3;
     border-top-color: var(--color-selection);
     border-radius: 50%;
-    animation: spin 0.8s linear infinite;
   }
 }
 
@@ -2229,7 +2214,7 @@ onBeforeUnmount(() => {
   width: min(420px, calc(100% - 28px));
   padding: 10px 12px;
   color: #fff;
-  background: #8e2424;
+  background: var(--color-error);
   border: 1px solid #4e0b0b;
   box-shadow: 3px 4px 12px rgb(0 0 0 / 34%);
 
@@ -2247,12 +2232,6 @@ onBeforeUnmount(() => {
     color: #fff;
     background: transparent;
     border: 1px solid rgb(255 255 255 / 45%);
-  }
-}
-
-@keyframes spin {
-  to {
-    rotate: 360deg;
   }
 }
 

@@ -1,0 +1,7 @@
+@mixin raised-panel($shadow: 2px 2px 8px rgb(0 0 0 / 42%)) {
+  color: var(--color-window-text);
+  background: var(--color-face);
+  border: 1px solid;
+  border-color: var(--border-raised);
+  box-shadow: $shadow;
+}

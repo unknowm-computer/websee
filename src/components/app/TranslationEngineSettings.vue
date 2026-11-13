@@ -87,10 +87,11 @@ watch(
         <div class="translation-engine-settings__actions">
           <button
             v-if="state === 'error' && installCommand"
+            class="action-button"
             type="button"
             @click="copyInstallCommand"
           >설치 명령 복사</button>
-          <button type="button" :disabled="state === 'checking'" @click="checkConnection">
+          <button class="action-button" type="button" :disabled="state === 'checking'" @click="checkConnection">
             다시 확인
           </button>
         </div>
@@ -106,7 +107,7 @@ watch(
 
         <div class="translation-engine-settings__command-area">
           <code ref="commandElement">{{ installCommand ?? "sh native/macos/install.sh <WebSee 확장 프로그램 ID>" }}</code>
-          <button v-if="installCommand && state !== 'error'" type="button" @click="copyInstallCommand">복사</button>
+          <button v-if="installCommand && state !== 'error'" class="action-button" type="button" @click="copyInstallCommand">복사</button>
         </div>
         <p v-if="!extensionId">
           확장 프로그램 ID는 chrome://extensions에서 개발자 모드를 켜 확인할 수

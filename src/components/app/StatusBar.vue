@@ -30,26 +30,26 @@ const displayedPath = computed(() => {
 
 <template>
   <footer class="status-bar" aria-live="polite">
-    <span class="status-bar__count">
+    <span class="status-cell status-bar__count">
       이미지 {{ imageCount }}개 / 전체 {{ totalCount }}개
       <template v-if="taskStatus"> · {{ taskStatus }}</template>
     </span>
     <template v-if="item">
-      <span class="status-bar__path" :title="itemPath ?? item.path">
+      <span class="status-cell status-bar__path" :title="itemPath ?? item.path">
         <span v-if="displayedPath.directory" class="status-bar__path-directory">
           <bdi dir="ltr">{{ displayedPath.directory }}</bdi>
         </span>
         <bdi class="status-bar__path-name" dir="ltr">{{ displayedPath.name }}</bdi>
       </span>
-      <span>
+      <span class="status-cell">
         {{ item.kind === 'archive-parent' || item.kind === 'folder' || item.kind === 'folder-parent' ? '—' : formatBytes(item.size) }}
       </span>
-      <span>{{ item.format }}</span>
-      <span>
+      <span class="status-cell">{{ item.format }}</span>
+      <span class="status-cell">
         {{ item.width && item.height ? `${item.width} × ${item.height}` : item.kind === 'image' || item.kind === 'archive-entry' ? '해상도 확인 중' : '—' }}
       </span>
     </template>
-    <span v-else class="status-bar__empty">선택한 항목 없음</span>
+    <span v-else class="status-cell status-bar__empty">선택한 항목 없음</span>
   </footer>
 </template>
 
@@ -63,14 +63,8 @@ const displayedPath = computed(() => {
   background: var(--color-face);
   border-top: 1px solid var(--color-light);
 
-  > span {
+  > .status-cell {
     min-width: 72px;
-    padding: 3px 7px;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-    border: 1px solid;
-    border-color: var(--color-shadow) var(--color-light) var(--color-light) var(--color-shadow);
   }
 
   &__count {
