@@ -52,7 +52,7 @@ describe('page translation boundaries', () => {
   it('protects app controls and filenames without blocking text viewers', () => {
     const elements = readElements('../src/App.vue')
     for (const tag of ['AppToolbar', 'FolderTree', 'StatusBar', 'ImageViewer',
-      'ImagePreviewPane', 'OptionsDialog', 'HelpDialog', 'BatchTranslationDialog',
+      'ImagePreviewPane', 'FileInfoDialog', 'OptionsDialog', 'HelpDialog', 'BatchTranslationDialog',
       'BatchTranslationMiniStatus']) {
       const element = elements.find(({ node }) => node.tag === tag)
       expect(element, tag).toBeDefined()

@@ -14,6 +14,7 @@ import {
 import AppToolbar from '@/components/app/AppToolbar.vue'
 import BatchTranslationDialog from '@/components/app/BatchTranslationDialog.vue'
 import BatchTranslationMiniStatus from '@/components/app/BatchTranslationMiniStatus.vue'
+import FileInfoDialog from '@/components/app/FileInfoDialog.vue'
 import HelpDialog from '@/components/app/HelpDialog.vue'
 import OptionsDialog from '@/components/app/OptionsDialog.vue'
 import StatusBar from '@/components/app/StatusBar.vue'
@@ -22,8 +23,10 @@ import FolderTree from '@/components/browser/FolderTree.vue'
 import ImagePreviewPane from '@/components/browser/ImagePreviewPane.vue'
 import TextPreviewPane from '@/components/browser/TextPreviewPane.vue'
 import ThumbnailGrid from '@/components/browser/ThumbnailGrid.vue'
+import PreviewPane from '@/components/common/PreviewPane.vue'
 import SvgIcon from '@/components/common/SvgIcon.vue'
 import ImageViewer from '@/components/viewer/ImageViewer.vue'
+import MediaPlayer from '@/components/viewer/MediaPlayer.vue'
 import TextViewer from '@/components/viewer/TextViewer.vue'
 import { useImageDimensions } from '@/composables/useImageDimensions'
 import { useBatchImageTranslation } from '@/composables/useBatchImageTranslation'
@@ -64,12 +67,16 @@ import type {
   MediaListColumnVisibility,
   MediaSortKey,
   MediaViewMode,
+  PlayableItem,
 } from '@/types/media'
 import {
+  CONTENT_FILE_ACCEPT,
+  formatBytes,
+  getDirectoryPath,
   isArchiveFileName,
   isArchiveMediaItem,
   isImageMediaItem,
-  getDirectoryPath,
+  isPlayableItem,
   naturalCompare,
   sortMediaItems,
 } from '@/utils/media'
@@ -112,6 +119,7 @@ const translationEngine = ref(readTranslationEnginePreference(localStorage, maco
 const appleTranslationModel = ref(readAppleTranslationModelPreference(localStorage))
 const ocrEngine = ref(readOcrEnginePreference(localStorage, macosPlatform))
 const viewerOpen = ref(false)
+const playbackItem = ref<PlayableItem>()
 const textViewerItem = ref<MediaItem>()
 const viewerItems = ref<MediaItem[]>([])
 const viewerCurrentId = ref<string>()
@@ -130,6 +138,7 @@ const archiveIndexingCompleted = ref(0)
 const archiveIndexingTotal = ref(0)
 const initialSlideshow = ref(false)
 const helpOpen = ref(false)
+const fileInfo = shallowRef<{ item: MediaItem; path: string }>()
 const optionsOpen = ref(false)
 const batchTranslationDialogOpen = ref(false)
 const loading = ref(false)
@@ -137,7 +146,7 @@ const loadingMessage = ref('파일을 읽는 중입니다...')
 const errorMessage = ref('')
 const dragActive = ref(false)
 const folderInput = ref<HTMLInputElement>()
-const imageInput = ref<HTMLInputElement>()
+const fileInput = ref<HTMLInputElement>()
 const archiveInput = ref<HTMLInputElement>()
 const mediaBrowser = ref<HTMLElement>()
 const thumbnailGrid = ref<{ moveSelectionByKey: (key: string) => boolean }>()
@@ -171,7 +180,7 @@ interface UseCollectionOptions {
 }
 
 const ARCHIVE_ENTRY_CACHE_LIMIT = 3
-const ARCHIVE_THUMBNAIL_MAX_ENTRY_SIZE = 128 * 1024 * 1024
+const ARCHIVE_AUTO_PREVIEW_MAX_ENTRY_SIZE = 128 * 1024 * 1024
 const DIRECTORY_PLACEHOLDER_FILE = new File([], 'directory', { lastModified: 0 })
 const archiveEntryFiles = new Map<string, File>()
 const archiveEntryRequests = new Map<string, Promise<File>>()
@@ -336,6 +345,11 @@ const selectedTreeNodeId = computed(() => {
 const selectedBrowserItem = computed(() =>
   browserItems.value.find((item) => item.id === browserSelectedId.value),
 )
+const selectedFile = computed(() => {
+  const item = selectedBrowserItem.value
+  if (!item || item.kind === 'folder' || item.kind === 'folder-parent' || item.kind === 'archive-parent') return
+  return item
+})
 const selectedStatusPath = computed(() => {
   const item = selectedBrowserItem.value
   const activeCollection = collection.value
@@ -577,6 +591,7 @@ function leaveArchiveBrowser(): void {
   const outerItemId = archiveOuterItemId.value
   closeViewer()
   closeTextViewer()
+  playbackItem.value = undefined
   disposeArchiveBrowser()
   selectedItemId.value = outerItemId
   browserTreeNodeId.value = outerItemId ? `archive:${outerItemId}` : undefined
@@ -652,8 +667,10 @@ async function useCollection(
 ): Promise<void> {
   closeViewer()
   closeTextViewer()
+  playbackItem.value = undefined
   disposeArchiveBrowser()
   revokeAll()
+  fileInfo.value = undefined
   directoryCollectionGeneration += 1
   directoryNavigationRequest += 1
   directoryLoadRequests.clear()
@@ -701,7 +718,7 @@ async function openDirectory(): Promise<void> {
 
   try {
     const handle = await window.showDirectoryPicker()
-    loadingMessage.value = '폴더의 이미지, 텍스트와 압축파일을 찾는 중입니다...'
+    loadingMessage.value = '폴더의 지원 파일을 찾는 중입니다...'
     loading.value = true
     const loadedDirectory = await loadDirectoryHandle(handle)
     await useCollection(loadedDirectory.collection, {
@@ -720,14 +737,14 @@ async function handleFolderSelection(event: Event): Promise<void> {
   const input = event.currentTarget
   if (!(input instanceof HTMLInputElement) || !input.files?.length) return
 
-  loadingMessage.value = '폴더의 이미지, 텍스트와 압축파일을 정리하는 중입니다...'
+  loadingMessage.value = '폴더의 지원 파일을 정리하는 중입니다...'
   loading.value = true
   try {
     const nextCollection = loadSelectedFiles([...input.files])
     const restore = pendingFolderRefresh
     pendingFolderRefresh = undefined
     await useCollection(nextCollection, { restore })
-    if (!nextCollection.items.length) showError('지원하는 이미지, 텍스트 또는 압축파일이 없는 폴더입니다.')
+    if (!nextCollection.items.length) showError('지원하는 파일이 없는 폴더입니다.')
   } finally {
     loading.value = false
     input.value = ''
@@ -773,12 +790,15 @@ async function refreshCollection(): Promise<void> {
   }
 }
 
-async function handleImageSelection(event: Event): Promise<void> {
+async function handleFileSelection(event: Event): Promise<void> {
   const input = event.currentTarget
   if (!(input instanceof HTMLInputElement) || !input.files?.length) return
 
-  await useCollection(loadSelectedFiles([...input.files]))
+  const selected = loadSelectedFiles([...input.files])
   input.value = ''
+  await useCollection(selected)
+  const [item] = selected.items
+  if (selected.items.length === 1 && isPlayableItem(item)) openViewer(item.id)
 }
 
 async function openArchiveFile(file: File): Promise<void> {
@@ -841,7 +861,7 @@ async function handleDrop(event: DragEvent): Promise<void> {
     }
     if (droppedHandles.directories[0]) {
       const handle = droppedHandles.directories[0]
-      loadingMessage.value = `${handle.name} 폴더의 이미지, 텍스트와 압축파일을 찾는 중입니다...`
+      loadingMessage.value = `${handle.name} 폴더의 지원 파일을 찾는 중입니다...`
       loading.value = true
       const loadedDirectory = await loadDirectoryHandle(handle)
       await useCollection(loadedDirectory.collection, {
@@ -867,18 +887,13 @@ async function handleDrop(event: DragEvent): Promise<void> {
 
   const nextCollection = loadSelectedFiles(files, droppedHandles.files)
   if (!nextCollection.items.length) {
-    showError('지원하는 이미지, 텍스트 또는 압축파일을 놓아주세요.')
+    showError('이미지, 텍스트, 음악, 동영상 또는 압축파일을 놓아주세요.')
     return
   }
   await useCollection(nextCollection)
 
   const droppedItem = nextCollection.items[0]
-  if (
-    files.length === 1
-    && (droppedItem.kind === 'image' || droppedItem.kind === 'text')
-  ) {
-    openViewer(droppedItem.id)
-  }
+  if (files.length === 1) openViewer(droppedItem.id)
 }
 
 function handleDragEnter(event: DragEvent): void {
@@ -1115,7 +1130,7 @@ async function enterArchiveBrowser(item: MediaItem): Promise<void> {
           + '중첩 압축은 지원하지 않으므로 바깥 압축을 풀고 내부 압축파일을 직접 열어주세요.',
         )
       } else {
-        showError('압축파일은 정상이지만 WebSee에서 지원하는 이미지나 텍스트가 없습니다.')
+        showError('압축파일은 정상이지만 WebSee에서 지원하는 파일이 없습니다.')
       }
       return
     }
@@ -1230,7 +1245,7 @@ async function processArchiveIndexing(index: ArchiveIndex, runId: number): Promi
     if (!item) break
 
     try {
-      if (item.size > ARCHIVE_THUMBNAIL_MAX_ENTRY_SIZE) {
+      if (item.size > ARCHIVE_AUTO_PREVIEW_MAX_ENTRY_SIZE) {
         throw new Error('Archive entry is too large for background thumbnailing.')
       }
       const file = await getArchiveEntryFile(index, item)
@@ -1356,6 +1371,11 @@ async function openArchiveTextEntry(item: MediaItem): Promise<void> {
   }
 }
 
+async function loadPlaybackFile(item: PlayableItem): Promise<File> {
+  const index = archiveIndex.value
+  return index && item.archiveEntryPath ? getArchiveEntryFile(index, item) : item.file
+}
+
 function openViewer(id?: string, slideshow = false): void {
   const targetId = id ?? browserSelectedId.value ?? browserItems.value[0]?.id
   if (!targetId) return
@@ -1404,6 +1424,12 @@ function openViewer(id?: string, slideshow = false): void {
 
   if (item.kind === 'archive-text-entry') {
     void openArchiveTextEntry(item)
+    return
+  }
+
+  if (isPlayableItem(item)) {
+    selectBrowserItem(item.id)
+    playbackItem.value = item
     return
   }
 
@@ -1457,6 +1483,19 @@ function updateDimensions(item: MediaItem, width: number, height: number): void 
 
 function requestDimensions(item: MediaItem): void {
   if (item.kind === 'image') void ensureDimensions(item)
+}
+
+function showFileInfo(): void {
+  const item = selectedFile.value
+  if (item) fileInfo.value = { item, path: selectedStatusPath.value ?? item.path }
+}
+
+function recordPlaybackMetadata(item: PlayableItem, media: HTMLMediaElement): void {
+  if (Number.isFinite(media.duration)) item.duration = media.duration
+  if (media instanceof HTMLVideoElement && media.videoWidth && media.videoHeight) {
+    item.width = media.videoWidth
+    item.height = media.videoHeight
+  }
 }
 
 function getTranslationSidecarTarget(item: MediaItem): TranslationSidecarTarget | undefined {
@@ -1620,10 +1659,14 @@ function moveSelection(delta: number): void {
 }
 
 function handleBrowserKeydown(event: KeyboardEvent): void {
+  if (fileInfo.value) {
+    if (event.key === 'F1' || event.key === 'F5') event.preventDefault()
+    return
+  }
   if (event.key === 'F5') {
     event.preventDefault()
     if (
-      !viewerOpen.value && !textViewerItem.value
+      !viewerOpen.value && !textViewerItem.value && !playbackItem.value
       && !helpOpen.value && !optionsOpen.value && !batchTranslationDialogOpen.value
     ) void refreshCollection()
     return
@@ -1637,10 +1680,10 @@ function handleBrowserKeydown(event: KeyboardEvent): void {
     return
   }
 
-  if (helpOpen.value || optionsOpen.value || batchTranslationDialogOpen.value) return
+  if (helpOpen.value || optionsOpen.value || batchTranslationDialogOpen.value || playbackItem.value) return
 
   const target = event.target
-  if (target instanceof HTMLInputElement || target instanceof HTMLSelectElement) return
+  if (target instanceof HTMLInputElement || target instanceof HTMLSelectElement || target instanceof HTMLMediaElement) return
   if (
     event.key !== 'Backspace'
     && target instanceof Element
@@ -1670,6 +1713,7 @@ function handleBrowserKeydown(event: KeyboardEvent): void {
   }
 
   if (event.key === 'Enter' && canOpenViewer.value) {
+    if (target instanceof Element && target.closest('.app-toolbar')) return
     event.preventDefault()
     openViewer()
   }
@@ -1752,6 +1796,7 @@ onBeforeUnmount(() => {
       translate="no"
       :batch-active="batchTranslationActive"
       :can-batch-translate="canBatchTranslate"
+      :can-show-file-info="Boolean(selectedFile)"
       :can-refresh="canRefreshCollection"
       :has-media="Boolean(collection?.items.length)"
       :sort-ascending="sortAscending"
@@ -1759,13 +1804,14 @@ onBeforeUnmount(() => {
       :translation-enabled="translationEnabled"
       :view-mode="viewMode"
       @open-directory="openDirectory"
-      @open-images="imageInput?.click()"
+      @open-files="fileInput?.click()"
       @open-archive="archiveInput?.click()"
       @refresh="refreshCollection"
       @show-batch-translation="showBatchTranslationDialog"
       @set-view="setViewMode"
       @set-sort="setSortKey"
       @toggle-sort-direction="sortAscending = !sortAscending"
+      @show-file-info="showFileInfo"
       @show-options="optionsOpen = true"
       @show-help="helpOpen = true"
     />
@@ -1808,6 +1854,36 @@ onBeforeUnmount(() => {
           v-if="selectedTextPreviewItem"
           :item="selectedTextPreviewItem"
         />
+        <PreviewPane
+          v-else-if="selectedBrowserItem && isPlayableItem(selectedBrowserItem)"
+          class="notranslate"
+          translate="no"
+          label="선택한 미디어 미리보기"
+          :file-name="selectedBrowserItem.name"
+          :file-path="selectedBrowserItem.path"
+        >
+          <MediaPlayer
+            :key="selectedBrowserItem.id"
+            :item="selectedBrowserItem"
+            :load-file="loadPlaybackFile"
+            :expanded="playbackItem?.id === selectedBrowserItem.id"
+            :defer-preview="Boolean(selectedBrowserItem.archiveEntryPath) && selectedBrowserItem.size > ARCHIVE_AUTO_PREVIEW_MAX_ENTRY_SIZE"
+            @metadata="recordPlaybackMetadata"
+            @close="playbackItem = undefined"
+          />
+          <template #actions>
+            <button
+              type="button"
+              class="action-button"
+              aria-label="플레이어 크게 열기"
+              title="플레이어 크게 열기"
+              @click="openViewer(selectedBrowserItem.id)"
+            >
+              <SvgIcon name="fit-screen" :size="16" />
+            </button>
+          </template>
+          <template #metadata>{{ selectedBrowserItem.format }} · {{ formatBytes(selectedBrowserItem.size) }}</template>
+        </PreviewPane>
         <ImagePreviewPane
           v-else
           class="notranslate"
@@ -1867,12 +1943,12 @@ onBeforeUnmount(() => {
 
       <div v-else class="media-browser__empty-folder notranslate" translate="no">
         <SvgIcon name="folder" :size="42" />
-        <strong>이 폴더에는 지원하는 이미지, 텍스트나 압축파일이 없습니다.</strong>
+        <strong>이 폴더에는 지원하는 파일이 없습니다.</strong>
         <p>왼쪽 폴더 트리에서 파일이 있는 폴더를 선택하세요.</p>
       </div>
     </section>
 
-    <section v-else class="empty-workspace" aria-label="열린 이미지 없음" />
+    <section v-else class="empty-workspace" aria-label="열린 파일 없음" />
 
     <StatusBar
       class="notranslate"
@@ -1894,13 +1970,13 @@ onBeforeUnmount(() => {
       @change="handleFolderSelection"
     />
     <input
-      ref="imageInput"
+      ref="fileInput"
       class="visually-hidden"
       type="file"
-      accept="image/avif,image/bmp,image/gif,image/jpeg,image/png,image/svg+xml,image/webp,.ico"
+      :accept="CONTENT_FILE_ACCEPT"
       multiple
-      aria-label="이미지 파일 선택"
-      @change="handleImageSelection"
+      aria-label="이미지, 텍스트, 음악, 동영상 파일 선택"
+      @change="handleFileSelection"
     />
     <input
       ref="archiveInput"
@@ -1912,7 +1988,7 @@ onBeforeUnmount(() => {
     />
 
     <div v-if="dragActive" class="drop-overlay notranslate" translate="no">
-      <div><strong>여기에 놓아서 열기</strong><span>폴더, 이미지, 텍스트 또는 압축파일</span></div>
+      <div><strong>여기에 놓아서 열기</strong><span>폴더, 이미지, 텍스트, 음악, 동영상 또는 압축파일</span></div>
     </div>
 
     <div v-if="loading" class="loading-overlay notranslate" translate="no" role="status">
@@ -1972,6 +2048,14 @@ onBeforeUnmount(() => {
       @saved="handleTextFileSaved"
     />
 
+    <FileInfoDialog
+      v-if="fileInfo"
+      class="notranslate"
+      translate="no"
+      :item="fileInfo.item"
+      :path="fileInfo.path"
+      @close="fileInfo = undefined"
+    />
     <HelpDialog v-if="helpOpen" class="notranslate" translate="no" @close="helpOpen = false" />
     <OptionsDialog
       v-if="optionsOpen"

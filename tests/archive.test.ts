@@ -77,6 +77,27 @@ describe('archive sources', () => {
     expect(new TextDecoder().decode(await extractedText.arrayBuffer())).toBe('ignore')
   })
 
+  it('recognizes loose and archived playback files and extracts them with a media MIME type', async () => {
+    const names = ['song.M4A', 'clip.WebM']
+    const files = names.map((name) => new File([name], name))
+    expect(loadSelectedFiles(files).items.map((item) => item.kind)).toEqual(['audio', 'video'])
+
+    const archive = new File([zipSync({
+      'music/song.M4A': strToU8('audio bytes'),
+      'movies/clip.WebM': strToU8('video bytes'),
+      'movies/._clip.WebM': strToU8('metadata'),
+    })], 'media.zip')
+    const index = await loadArchiveIndex(archive)
+    expect(index.items.map((item) => [item.path, item.kind])).toEqual([
+      ['music/song.M4A', 'audio'],
+      ['movies/clip.WebM', 'video'],
+    ])
+    expect(index.items.every((item) => item.file === archive)).toBe(true)
+    const [audio, video] = await Promise.all(index.items.map((item) => extractArchiveEntry(index, item)))
+    expect([audio.type, await audio.text()]).toEqual(['audio/mp4', 'audio bytes'])
+    expect([video.type, await video.text()]).toEqual(['video/webm', 'video bytes'])
+  })
+
   it('decodes legacy CP949 Korean entry names and still extracts the selected image', async () => {
     const placeholderName = '1234.jpg'
     const cp949KoreanName = new Uint8Array([0xc7, 0xd1, 0xb1, 0xdb, 0x2e, 0x6a, 0x70, 0x67])

@@ -6,6 +6,7 @@ import arrowDownUrl from "@/images/icons/arrow_down.svg";
 import arrowLeftUrl from "@/images/icons/arrow_left.svg";
 import arrowRightUrl from "@/images/icons/arrow_right.svg";
 import arrowUpUrl from "@/images/icons/arrow_up.svg";
+import audioUrl from "@/images/icons/audio.svg";
 import autoUrl from "@/images/icons/auto.svg";
 import blurOffUrl from "@/images/icons/blur_off.svg";
 import blurOnUrl from "@/images/icons/blur_on.svg";
@@ -21,10 +22,13 @@ import fitWidthUrl from "@/images/icons/fit_width.svg";
 import folderUrl from "@/images/icons/folder.svg";
 import folderOpenUrl from "@/images/icons/folder_open.svg";
 import folderZipUrl from "@/images/icons/folder_zip.svg";
+import fullscreenUrl from "@/images/icons/fullscreen.svg";
+import fullscreenExitUrl from "@/images/icons/fullscreen_exit.svg";
 import translateUrl from "@/images/icons/g_translate.svg";
 import gridUrl from "@/images/icons/grid.svg";
 import helpUrl from "@/images/icons/help.svg";
 import imageUrl from "@/images/icons/image.svg";
+import infoUrl from "@/images/icons/info.svg";
 import listUrl from "@/images/icons/list.svg";
 import optionsUrl from "@/images/icons/options.svg";
 import playUrl from "@/images/icons/play.svg";
@@ -34,6 +38,7 @@ import removeUrl from "@/images/icons/remove.svg";
 import rotateUrl from "@/images/icons/rotate.svg";
 import saveUrl from "@/images/icons/save.svg";
 import saveAsUrl from "@/images/icons/save_as.svg";
+import videoUrl from "@/images/icons/video.svg";
 import zoomInUrl from "@/images/icons/zoom_in.svg";
 import zoomOutUrl from "@/images/icons/zoom_out.svg";
 
@@ -43,6 +48,7 @@ const iconUrls = {
   "arrow-left": arrowLeftUrl,
   "arrow-right": arrowRightUrl,
   "arrow-up": arrowUpUrl,
+  audio: audioUrl,
   auto: autoUrl,
   "blur-off": blurOffUrl,
   "blur-on": blurOnUrl,
@@ -57,10 +63,13 @@ const iconUrls = {
   folder: folderUrl,
   "folder-open": folderOpenUrl,
   "folder-zip": folderZipUrl,
+  fullscreen: fullscreenUrl,
+  "fullscreen-exit": fullscreenExitUrl,
   grid: gridUrl,
   help: helpUrl,
   translate: translateUrl,
   image: imageUrl,
+  info: infoUrl,
   list: listUrl,
   options: optionsUrl,
   play: playUrl,
@@ -70,6 +79,7 @@ const iconUrls = {
   rotate: rotateUrl,
   save: saveUrl,
   "save-as": saveAsUrl,
+  video: videoUrl,
   "zoom-in": zoomInUrl,
   "zoom-out": zoomOutUrl,
   "real-size": realSizeUrl,

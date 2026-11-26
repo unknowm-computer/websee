@@ -9,12 +9,14 @@ interface Props {
   closeLabel?: string;
   busy?: boolean;
   dismissible?: boolean;
+  closeOnBackdropClick?: boolean;
 }
 
 const props = withDefaults(defineProps<Props>(), {
   closeLabel: "닫기",
   busy: false,
   dismissible: true,
+  closeOnBackdropClick: true,
 });
 
 const emit = defineEmits<{
@@ -43,7 +45,7 @@ onBeforeUnmount(() => dialog.value?.close());
     :aria-labelledby="titleId"
     :aria-busy="busy"
     @cancel.prevent="requestDismiss"
-    @click.self="requestDismiss"
+    @click.self="closeOnBackdropClick && requestDismiss()"
   >
     <section class="app-dialog" :class="panelClass">
       <header class="app-dialog__header">
@@ -51,6 +53,7 @@ onBeforeUnmount(() => dialog.value?.close());
           <slot name="title-icon" />
           {{ title }}
         </strong>
+        <slot name="title-actions" />
         <button
           class="action-button"
           type="button"
@@ -110,7 +113,7 @@ onBeforeUnmount(() => dialog.value?.close());
   &__header {
     display: flex;
     align-items: center;
-    justify-content: space-between;
+    gap: 3px;
     height: 30px;
     padding: 3px 4px 3px 8px;
     color: var(--color-light);
@@ -118,6 +121,7 @@ onBeforeUnmount(() => dialog.value?.close());
 
     > button {
       display: grid;
+      flex: none;
       place-items: center;
       width: 23px;
       height: 22px;
@@ -130,6 +134,8 @@ onBeforeUnmount(() => dialog.value?.close());
     display: inline-flex;
     gap: 5px;
     align-items: center;
+    min-width: 0;
+    margin-inline-end: auto;
   }
 
   &__footer {

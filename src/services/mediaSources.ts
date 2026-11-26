@@ -2,18 +2,17 @@ import { unzip } from 'fflate'
 
 import { extractRarEntry, listRarEntries } from '@/services/rarArchive'
 import { isMacosArchiveMetadata, readZipEntryNames } from '@/services/zipFileNames'
-import type { ArchiveIndex, MediaCollection, MediaDirectoryNode, MediaItem } from '@/types/media'
+import type { ArchiveIndex, MediaCollection, MediaDirectoryNode, MediaItem, MediaItemKind } from '@/types/media'
 import {
   buildDirectoryTree,
   createMediaItem,
-  getImageMimeType,
-  getFileFormat,
+  getContentFileKind,
   getDirectoryPath,
+  getFileFormat,
+  getMediaMimeType,
   isArchiveFileName,
-  isImageFileName,
   isRarArchiveFileName,
   isSupportedMediaFileName,
-  isTextFileName,
   naturalCompare,
 } from '@/utils/media'
 
@@ -175,6 +174,13 @@ export async function loadArchiveIndex(file: File): Promise<ArchiveIndex> {
   return loadZipArchiveIndex(file, data)
 }
 
+function getArchiveEntryKind(path: string): MediaItemKind | undefined {
+  const kind = getContentFileKind(path)
+  if (kind === 'image') return 'archive-entry'
+  if (kind === 'text') return 'archive-text-entry'
+  return kind
+}
+
 async function loadZipArchiveIndex(file: File, data: ArrayBuffer): Promise<ArchiveIndex> {
   const bytes = new Uint8Array(data)
   const archiveId = `archive-index:${file.name}:${file.size}:${file.lastModified}`
@@ -200,16 +206,16 @@ async function loadZipArchiveIndex(file: File, data: ArrayBuffer): Promise<Archi
             nestedArchivePaths.push(decodedPath)
           }
 
-          const supportedEntry = isImageFileName(decodedPath) || isTextFileName(decodedPath)
+          const kind = getArchiveEntryKind(decodedPath)
           if (
             !decodedPath.endsWith('/')
             && !isMacosArchiveMetadata(decodedPath)
-            && supportedEntry
+            && kind
           ) {
             const name = decodedPath.split('/').at(-1) ?? decodedPath
             items.push({
               id: `${archiveId}:${currentEntryIndex}:${decodedPath}:${entry.originalSize}`,
-              kind: isTextFileName(decodedPath) ? 'archive-text-entry' : 'archive-entry',
+              kind,
               name,
               path: decodedPath,
               directoryPath: getDirectoryPath(decodedPath),
@@ -248,17 +254,16 @@ async function loadRarArchiveIndex(file: File, data: ArrayBuffer): Promise<Archi
     .map((entry) => entry.path.replaceAll('\\', '/'))
     .filter((path) => !isMacosArchiveMetadata(path) && isArchiveFileName(path))
   const items = entries
-    .filter((entry) =>
-      !isMacosArchiveMetadata(entry.path)
-      && (isImageFileName(entry.path) || isTextFileName(entry.path)),
-    )
-    .map<MediaItem>((entry, entryIndex) => {
+    .filter((entry) => !isMacosArchiveMetadata(entry.path))
+    .flatMap<MediaItem>((entry, entryIndex) => {
+      const kind = getArchiveEntryKind(entry.path)
+      if (!kind) return []
       const name = entry.path.split(/[\\/]/).at(-1) ?? entry.path
       const normalizedPath = entry.path.replaceAll('\\', '/')
 
       return {
         id: `${archiveId}:${entryIndex}:${normalizedPath}:${entry.size}`,
-        kind: isTextFileName(normalizedPath) ? 'archive-text-entry' : 'archive-entry',
+        kind,
         name,
         path: normalizedPath,
         directoryPath: getDirectoryPath(normalizedPath),
@@ -321,7 +326,7 @@ export async function extractArchiveEntry(
   }
 
   return new File([extractedData], item.name, {
-    type: item.kind === 'archive-text-entry' ? 'text/plain' : getImageMimeType(item.name),
+    type: getMediaMimeType(item.name),
     lastModified: index.archiveFile.lastModified,
   })
 }

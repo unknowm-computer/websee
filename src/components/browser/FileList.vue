@@ -3,7 +3,7 @@ import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 
 import SvgIcon from '@/components/common/SvgIcon.vue'
 import type { MediaItem, MediaListColumnKey, MediaListColumnVisibility } from '@/types/media'
-import { formatBytes, getExtension } from '@/utils/media'
+import { formatBytes, getExtension, isPlayableItem } from '@/utils/media'
 
 interface Props {
   items: MediaItem[]
@@ -87,8 +87,7 @@ function formatModifiedDate(item: MediaItem): string {
     item.kind === 'folder'
     || item.kind === 'folder-parent'
     || item.kind === 'archive-parent'
-    || item.kind === 'archive-entry'
-    || item.kind === 'archive-text-entry'
+    || item.archiveEntryPath !== undefined
     || !item.lastModified
   ) return '—'
 
@@ -199,6 +198,7 @@ onBeforeUnmount(() => resizeObserver?.disconnect())
               name="docs"
               :size="18"
             />
+            <SvgIcon v-else-if="isPlayableItem(entry.item)" :name="entry.item.kind" :size="18" />
             <SvgIcon
               v-else
               :name="entry.item.kind === 'archive'

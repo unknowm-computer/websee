@@ -3,6 +3,7 @@ import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 
 import SvgIcon from '@/components/common/SvgIcon.vue'
 import type { MediaItem } from '@/types/media'
+import { isPlayableItem } from '@/utils/media'
 
 interface Props {
   items: MediaItem[]
@@ -211,6 +212,7 @@ defineExpose({ moveSelectionByKey })
           <span v-else-if="entry.item.kind === 'text' || entry.item.kind === 'archive-text-entry'" class="thumbnail-grid__text-icon" aria-hidden="true">
             <SvgIcon name="docs" :size="58" />
           </span>
+          <SvgIcon v-else-if="isPlayableItem(entry.item)" :name="entry.item.kind" :size="58" />
           <span v-else class="thumbnail-grid__entry-icon" aria-hidden="true">
             <SvgIcon name="image" :size="58" />
           </span>
@@ -224,6 +226,7 @@ defineExpose({ moveSelectionByKey })
           <template v-else>
             {{ entry.item.format }}
             <template v-if="entry.item.kind === 'archive'"> · 압축파일</template>
+            <template v-else-if="isPlayableItem(entry.item)"> · {{ entry.item.kind === 'audio' ? '음악' : '동영상' }}</template>
             <template v-else-if="entry.item.kind === 'text'"> · 텍스트</template>
             <template v-else-if="entry.item.kind === 'archive-text-entry'"> · 압축 텍스트</template>
             <template v-else-if="entry.item.kind === 'archive-entry'">

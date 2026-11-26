@@ -5,6 +5,7 @@ import type { MediaSortKey, MediaViewMode } from "@/types/media";
 interface Props {
   batchActive: boolean;
   canBatchTranslate: boolean;
+  canShowFileInfo: boolean;
   canRefresh: boolean;
   hasMedia: boolean;
   sortAscending: boolean;
@@ -17,13 +18,14 @@ defineProps<Props>();
 
 const emit = defineEmits<{
   (event: "open-directory"): void;
-  (event: "open-images"): void;
+  (event: "open-files"): void;
   (event: "open-archive"): void;
   (event: "refresh"): void;
   (event: "show-batch-translation"): void;
   (event: "set-view", mode: MediaViewMode): void;
   (event: "set-sort", key: MediaSortKey): void;
   (event: "toggle-sort-direction"): void;
+  (event: "show-file-info"): void;
   (event: "show-options"): void;
   (event: "show-help"): void;
 }>();
@@ -35,9 +37,9 @@ const emit = defineEmits<{
       <SvgIcon class="app-toolbar__icon" name="folder-open" />
       <span>폴더</span>
     </button>
-    <button type="button" title="이미지 파일 열기" @click="emit('open-images')">
-      <SvgIcon class="app-toolbar__icon" name="image" />
-      <span>이미지</span>
+    <button type="button" title="이미지, 텍스트, 음악, 동영상 파일 열기" @click="emit('open-files')">
+      <SvgIcon class="app-toolbar__icon" name="file" />
+      <span>파일</span>
     </button>
     <button
       type="button"
@@ -111,6 +113,19 @@ const emit = defineEmits<{
       <SvgIcon :name="sortAscending ? 'arrow-up' : 'arrow-down'" :size="18" />
     </button>
 
+    <span class="app-toolbar__separator" aria-hidden="true" />
+
+    <button
+      type="button"
+      title="선택한 파일의 상세 정보 보기"
+      aria-haspopup="dialog"
+      :disabled="!canShowFileInfo"
+      @click="emit('show-file-info')"
+    >
+      <SvgIcon class="app-toolbar__icon" name="info" />
+      <span>파일 정보</span>
+    </button>
+
     <template v-if="translationEnabled">
       <span class="app-toolbar__separator" aria-hidden="true" />
 
@@ -146,6 +161,7 @@ const emit = defineEmits<{
 <style lang="scss">
 .app-toolbar {
   display: flex;
+  flex-wrap: wrap;
   gap: 2px;
   align-items: stretch;
   min-height: 51px;
@@ -217,9 +233,4 @@ const emit = defineEmits<{
   }
 }
 
-@media (max-width: 760px) {
-  .app-toolbar {
-    flex-wrap: wrap;
-  }
-}
 </style>

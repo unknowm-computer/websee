@@ -12,9 +12,13 @@ export type MediaListColumnVisibility = Record<MediaListColumnKey, boolean>
 
 export type MediaTreeNodeKind = 'folder' | 'archive' | 'archive-directory'
 
+export type PlayableItem = MediaItem & { kind: 'audio' | 'video'; duration?: number }
+
 export type MediaItemKind =
   | 'image'
   | 'text'
+  | 'audio'
+  | 'video'
   | 'archive'
   | 'archive-entry'
   | 'archive-text-entry'

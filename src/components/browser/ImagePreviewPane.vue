@@ -36,11 +36,11 @@ const emptyMessage = computed(() => {
     props.item?.kind === 'archive'
     || props.item?.kind === 'archive-parent'
   ) {
-    return '압축파일을 열고 이미지를 선택하세요.'
+    return '압축파일 안에서 미리 볼 파일을 선택하세요.'
   }
   if (props.item?.kind === 'archive-entry') return '이미지 미리보기를 표시할 수 없습니다.'
   if (props.item?.kind === 'archive-text-entry') return '텍스트 미리보기를 표시할 수 없습니다.'
-  return '이미지 파일을 선택하세요.'
+  return '미리 볼 파일을 선택하세요.'
 })
 
 function handleImageLoad(event: Event): void {

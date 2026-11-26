@@ -1048,7 +1048,7 @@ onBeforeUnmount(() => {
         :aria-pressed="isFullscreen"
         @click="toggleFullscreen"
       >
-        <SvgIcon :name="isFullscreen ? 'zoom-out' : 'zoom-in'" :size="20" />
+        <SvgIcon :name="isFullscreen ? 'zoom-in' : 'zoom-out'" :size="20" />
         <span class="image-viewer__button-label">전체화면</span>
       </button>
       <span class="image-viewer__align-left"></span>

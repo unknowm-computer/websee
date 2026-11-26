@@ -10,7 +10,10 @@ defineProps<Props>()
 
 <template>
   <section class="preview-pane" :aria-label="label">
-    <header class="pane-heading notranslate" translate="no">미리보기</header>
+    <header class="pane-heading notranslate" translate="no">
+      미리보기
+      <slot name="actions" />
+    </header>
 
     <slot />
 
@@ -28,6 +31,17 @@ defineProps<Props>()
   min-width: 0;
   min-height: 0;
   background: var(--color-face);
+
+  > .pane-heading {
+    justify-content: space-between;
+
+    > .action-button {
+      display: grid;
+      place-items: center;
+      min-height: 0;
+      padding: 1px 3px;
+    }
+  }
 
   &__state {
     display: flex;

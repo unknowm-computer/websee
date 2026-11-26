@@ -1,20 +1,8 @@
-import type { MediaDirectoryNode, MediaItem, MediaSortKey } from '@/types/media'
-
-const IMAGE_EXTENSIONS = new Set([
-  'avif',
-  'bmp',
-  'gif',
-  'ico',
-  'jpeg',
-  'jpg',
-  'png',
-  'svg',
-  'webp',
-])
+import type { MediaDirectoryNode, MediaItem, MediaSortKey, PlayableItem } from '@/types/media'
 
 const TEXT_EXTENSIONS = new Set(['json', 'smi', 'srt', 'text', 'txt'])
 
-const MIME_TYPES: Record<string, string> = {
+const mimeTypes = new Map(Object.entries({
   avif: 'image/avif',
   bmp: 'image/bmp',
   gif: 'image/gif',
@@ -24,7 +12,26 @@ const MIME_TYPES: Record<string, string> = {
   png: 'image/png',
   svg: 'image/svg+xml',
   webp: 'image/webp',
-}
+  aac: 'audio/aac',
+  flac: 'audio/flac',
+  m4a: 'audio/mp4',
+  mp3: 'audio/mpeg',
+  oga: 'audio/ogg',
+  ogg: 'audio/ogg',
+  opus: 'audio/ogg',
+  wav: 'audio/wav',
+  weba: 'audio/webm',
+  m4v: 'video/mp4',
+  mkv: 'video/x-matroska',
+  mov: 'video/quicktime',
+  mp4: 'video/mp4',
+  ogv: 'video/ogg',
+  webm: 'video/webm',
+}))
+
+export const CONTENT_FILE_ACCEPT = [...mimeTypes.keys(), ...TEXT_EXTENSIONS]
+  .map((extension) => `.${extension}`)
+  .join(',')
 
 const collator = new Intl.Collator(undefined, {
   numeric: true,
@@ -45,16 +52,26 @@ export function getFileFormat(fileName: string): string {
   return extension === 'jpg' ? 'JPEG' : extension.toUpperCase() || 'UNKNOWN'
 }
 
-export function getImageMimeType(fileName: string): string {
-  return MIME_TYPES[getExtension(fileName)] ?? 'application/octet-stream'
+export function getMediaMimeType(fileName: string): string {
+  if (isTextFileName(fileName)) return 'text/plain'
+  return mimeTypes.get(getExtension(fileName)) ?? 'application/octet-stream'
 }
 
 export function isImageFileName(fileName: string): boolean {
-  return IMAGE_EXTENSIONS.has(getExtension(fileName))
+  return mimeTypes.get(getExtension(fileName))?.startsWith('image/') ?? false
 }
 
 export function isTextFileName(fileName: string): boolean {
   return TEXT_EXTENSIONS.has(getExtension(fileName))
+}
+
+export function getContentFileKind(fileName: string): 'image' | 'text' | 'audio' | 'video' | undefined {
+  const type = getMediaMimeType(fileName).split('/')[0]
+  if (type === 'image' || type === 'text' || type === 'audio' || type === 'video') return type
+}
+
+export function isPlayableItem(item: MediaItem): item is PlayableItem {
+  return item.kind === 'audio' || item.kind === 'video'
 }
 
 export function isArchiveFileName(fileName: string): boolean {
@@ -72,7 +89,7 @@ export function isRarArchiveFileName(fileName: string): boolean {
 }
 
 export function isSupportedMediaFileName(fileName: string): boolean {
-  return isImageFileName(fileName) || isTextFileName(fileName) || isArchiveFileName(fileName)
+  return getContentFileKind(fileName) !== undefined || isArchiveFileName(fileName)
 }
 
 export function isImageMediaItem(item: MediaItem): boolean {
@@ -212,16 +229,14 @@ export function createMediaItem(
   idPrefix = '',
   fileHandle?: FileSystemFileHandle,
 ): MediaItem {
+  const kind = isArchiveFileName(file.name) ? 'archive' : getContentFileKind(file.name)
+  if (!kind) throw new Error(`Unsupported file: ${file.name}`)
   const normalizedPath = normalizePath(path) || file.name
   const prefix = idPrefix ? `${idPrefix}:` : ''
 
   return {
     id: `${prefix}${normalizedPath}:${file.size}:${file.lastModified}`,
-    kind: isArchiveFileName(file.name)
-      ? 'archive'
-      : isTextFileName(file.name)
-        ? 'text'
-        : 'image',
+    kind,
     name: normalizedPath.split('/').at(-1) ?? file.name,
     path: normalizedPath,
     directoryPath: getDirectoryPath(normalizedPath),
