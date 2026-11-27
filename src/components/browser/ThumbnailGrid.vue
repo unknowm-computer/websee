@@ -154,7 +154,11 @@ onMounted(() => {
 
 onBeforeUnmount(() => resizeObserver?.disconnect())
 
-defineExpose({ moveSelectionByKey })
+const viewportItems = computed(() => props.items.slice(
+  Math.floor(scrollTop.value / ROW_HEIGHT) * columnCount.value,
+  Math.ceil((scrollTop.value + viewportHeight.value) / ROW_HEIGHT) * columnCount.value,
+))
+defineExpose({ moveSelectionByKey, viewportItems })
 </script>
 
 <template>
@@ -229,13 +233,8 @@ defineExpose({ moveSelectionByKey })
             <template v-else-if="isPlayableItem(entry.item)"> · {{ entry.item.kind === 'audio' ? '음악' : '동영상' }}</template>
             <template v-else-if="entry.item.kind === 'text'"> · 텍스트</template>
             <template v-else-if="entry.item.kind === 'archive-text-entry'"> · 압축 텍스트</template>
-            <template v-else-if="entry.item.kind === 'archive-entry'">
-              · 압축 이미지
-              <template v-if="entry.item.width && entry.item.height">
-                · {{ entry.item.width }}×{{ entry.item.height }}
-              </template>
-            </template>
-            <template v-else-if="entry.item.width && entry.item.height">
+            <template v-else-if="entry.item.kind === 'archive-entry'"> · 압축 이미지</template>
+            <template v-if="entry.item.width && entry.item.height">
               · {{ entry.item.width }}×{{ entry.item.height }}
             </template>
           </template>

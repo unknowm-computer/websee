@@ -1,6 +1,10 @@
 export type MediaSourceKind = 'folder' | 'files' | 'archive'
 
-export type ArchiveFormat = 'zip' | 'rar'
+export type ArchiveStorage =
+  | { format: 'zip' | 'rar'; data: ArrayBuffer }
+  | { format: '7z'; readEntry: (index: number) => Promise<Uint8Array<ArrayBuffer>>; release: () => void }
+
+export type ArchiveFormat = ArchiveStorage['format']
 
 export type MediaViewMode = 'grid' | 'list'
 
@@ -65,10 +69,8 @@ export interface MediaCollection {
   tree: MediaDirectoryNode
 }
 
-export interface ArchiveIndex {
+export type ArchiveIndex = ArchiveStorage & {
   archiveFile: File
-  format: ArchiveFormat
-  data: ArrayBuffer
   items: MediaItem[]
   nestedArchivePaths: string[]
   tree: MediaDirectoryNode

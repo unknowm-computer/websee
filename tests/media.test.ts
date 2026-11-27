@@ -4,6 +4,7 @@ import type { MediaItem } from '@/types/media'
 import {
   buildDirectoryTree,
   formatBytes,
+  formatDuration,
   getFileFormat,
   isArchiveFileName,
   isImageFileName,
@@ -43,6 +44,15 @@ function folderItem(name: string, path: string): MediaItem {
 }
 
 describe('media utilities', () => {
+  it('formats total playback time and distinguishes zero from missing metadata', () => {
+    expect(formatDuration(0)).toBe('0:00')
+    expect(formatDuration(187.9)).toBe('3:07')
+    expect(formatDuration(3725.9)).toBe('1:02:05')
+    for (const duration of [undefined, NaN, Infinity, -1]) {
+      expect(formatDuration(duration)).toBe('—')
+    }
+  })
+
   it('recognizes supported images, text files, and archives case-insensitively', () => {
     expect(isImageFileName('photo.JPG')).toBe(true)
     expect(isImageFileName('notes.txt')).toBe(false)
@@ -57,7 +67,8 @@ describe('media utilities', () => {
     expect(isArchiveFileName('comic.CBZ')).toBe(true)
     expect(isArchiveFileName('comic.rar')).toBe(true)
     expect(isArchiveFileName('comic.CBR')).toBe(true)
-    expect(isArchiveFileName('comic.7z')).toBe(false)
+    expect(isArchiveFileName('comic.7Z')).toBe(true)
+    expect(isArchiveFileName('comic.7z.001')).toBe(false)
   })
 
   it('sorts numbered file names naturally', () => {

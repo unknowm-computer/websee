@@ -2,13 +2,14 @@ import { unzip } from 'fflate'
 
 import { extractRarEntry, listRarEntries } from '@/services/rarArchive'
 import { isMacosArchiveMetadata, readZipEntryNames } from '@/services/zipFileNames'
-import type { ArchiveIndex, MediaCollection, MediaDirectoryNode, MediaItem, MediaItemKind } from '@/types/media'
+import type { ArchiveIndex, ArchiveStorage, MediaCollection, MediaDirectoryNode, MediaItem, MediaItemKind } from '@/types/media'
 import {
   buildDirectoryTree,
   createMediaItem,
   getContentFileKind,
   getDirectoryPath,
   getFileFormat,
+  getExtension,
   getMediaMimeType,
   isArchiveFileName,
   isRarArchiveFileName,
@@ -168,8 +169,15 @@ export function loadSelectedFiles(
 }
 
 export async function loadArchiveIndex(file: File): Promise<ArchiveIndex> {
+  if (getExtension(file.name) === '7z') {
+    const { openSevenZip } = await import('@/services/sevenZipArchive')
+    const { entries, readEntry, release } = await openSevenZip(file)
+    return indexArchiveEntries(file, entries, { format: '7z', readEntry, release })
+  }
   const data = await file.arrayBuffer()
-  if (isRarArchiveFileName(file.name)) return loadRarArchiveIndex(file, data)
+  if (isRarArchiveFileName(file.name)) {
+    return indexArchiveEntries(file, await listRarEntries(data), { format: 'rar', data })
+  }
 
   return loadZipArchiveIndex(file, data)
 }
@@ -247,9 +255,12 @@ async function loadZipArchiveIndex(file: File, data: ArrayBuffer): Promise<Archi
   }
 }
 
-async function loadRarArchiveIndex(file: File, data: ArrayBuffer): Promise<ArchiveIndex> {
+function indexArchiveEntries(
+  file: File,
+  entries: { path: string; size: number; index?: number }[],
+  storage: ArchiveStorage,
+): ArchiveIndex {
   const archiveId = `archive-index:${file.name}:${file.size}:${file.lastModified}`
-  const entries = await listRarEntries(data)
   const nestedArchivePaths = entries
     .map((entry) => entry.path.replaceAll('\\', '/'))
     .filter((path) => !isMacosArchiveMetadata(path) && isArchiveFileName(path))
@@ -271,15 +282,14 @@ async function loadRarArchiveIndex(file: File, data: ArrayBuffer): Promise<Archi
         size: entry.size,
         format: getFileFormat(name),
         lastModified: file.lastModified,
-        archiveEntryIndex: entryIndex,
+        archiveEntryIndex: entry.index ?? entryIndex,
         archiveEntryPath: entry.path,
       }
     })
 
   return {
     archiveFile: file,
-    format: 'rar',
-    data,
+    ...storage,
     items,
     nestedArchivePaths,
     tree: buildDirectoryTree(file.name, items),
@@ -297,7 +307,10 @@ export async function extractArchiveEntry(
   }
 
   let extractedData: Uint8Array
-  if (index.format === 'rar') {
+  if (index.format === '7z') {
+    if (selectedEntryIndex === undefined) throw new Error('7z entry index is missing.')
+    extractedData = await index.readEntry(selectedEntryIndex)
+  } else if (index.format === 'rar') {
     if (!entryPath) throw new Error('RAR entry path is missing.')
     extractedData = await extractRarEntry(index.data, entryPath)
   } else {

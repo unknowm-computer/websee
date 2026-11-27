@@ -70,27 +70,31 @@ async function* createBatchTranslationEvents(
       continue
     }
 
-    const entries = index.items
-      .filter((item) => item.kind === 'archive-entry')
-      .sort((left, right) => naturalCompare(left.path, right.path))
-    yield { type: 'discover', count: entries.length }
+    try {
+      const entries = index.items
+        .filter((item) => item.kind === 'archive-entry')
+        .sort((left, right) => naturalCompare(left.path, right.path))
+      yield { type: 'discover', count: entries.length }
 
-    for (const entry of entries) {
-      const target: TranslationSidecarTarget = {
-        directoryHandle,
-        sourceItem: archiveItem,
-        archiveEntryPath: entry.path,
+      for (const entry of entries) {
+        const target: TranslationSidecarTarget = {
+          directoryHandle,
+          sourceItem: archiveItem,
+          archiveEntryPath: entry.path,
+        }
+        yield {
+          type: 'task',
+          task: {
+            item: entry,
+            label: `${archiveItem.name} / ${entry.path}`,
+            loadFile: () => extractArchiveEntry(index, entry),
+            loadSavedResult: () => loadTranslationSidecar(target, entry),
+            saveResult: (result) => saveTranslationSidecar(target, entry, result),
+          },
+        }
       }
-      yield {
-        type: 'task',
-        task: {
-          item: entry,
-          label: `${archiveItem.name} / ${entry.path}`,
-          loadFile: () => extractArchiveEntry(index, entry),
-          loadSavedResult: () => loadTranslationSidecar(target, entry),
-          saveResult: (result) => saveTranslationSidecar(target, entry, result),
-        },
-      }
+    } finally {
+      if (index.format === '7z') index.release()
     }
   }
 }

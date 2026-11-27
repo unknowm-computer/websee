@@ -9,29 +9,44 @@ import {
   shallowReactive,
   shallowRef,
   watch,
-} from 'vue'
+} from "vue";
 
-import AppToolbar from '@/components/app/AppToolbar.vue'
-import BatchTranslationDialog from '@/components/app/BatchTranslationDialog.vue'
-import BatchTranslationMiniStatus from '@/components/app/BatchTranslationMiniStatus.vue'
-import FileInfoDialog from '@/components/app/FileInfoDialog.vue'
-import HelpDialog from '@/components/app/HelpDialog.vue'
-import OptionsDialog from '@/components/app/OptionsDialog.vue'
-import StatusBar from '@/components/app/StatusBar.vue'
-import FileList from '@/components/browser/FileList.vue'
-import FolderTree from '@/components/browser/FolderTree.vue'
-import ImagePreviewPane from '@/components/browser/ImagePreviewPane.vue'
-import TextPreviewPane from '@/components/browser/TextPreviewPane.vue'
-import ThumbnailGrid from '@/components/browser/ThumbnailGrid.vue'
-import PreviewPane from '@/components/common/PreviewPane.vue'
-import SvgIcon from '@/components/common/SvgIcon.vue'
-import ImageViewer from '@/components/viewer/ImageViewer.vue'
-import MediaPlayer from '@/components/viewer/MediaPlayer.vue'
-import TextViewer from '@/components/viewer/TextViewer.vue'
-import { useImageDimensions } from '@/composables/useImageDimensions'
-import { useBatchImageTranslation } from '@/composables/useBatchImageTranslation'
-import { useObjectUrls } from '@/composables/useObjectUrls'
-import { useResizableMediaPanes } from '@/composables/useResizableMediaPanes'
+import AppToolbar from "@/components/app/AppToolbar.vue";
+import BatchTranslationDialog from "@/components/app/BatchTranslationDialog.vue";
+import BatchTranslationMiniStatus from "@/components/app/BatchTranslationMiniStatus.vue";
+import FileInfoDialog from "@/components/app/FileInfoDialog.vue";
+import HelpDialog from "@/components/app/HelpDialog.vue";
+import OptionsDialog from "@/components/app/OptionsDialog.vue";
+import StatusBar from "@/components/app/StatusBar.vue";
+import FileList from "@/components/browser/FileList.vue";
+import FolderTree from "@/components/browser/FolderTree.vue";
+import ImagePreviewPane from "@/components/browser/ImagePreviewPane.vue";
+import TextPreviewPane from "@/components/browser/TextPreviewPane.vue";
+import ThumbnailGrid from "@/components/browser/ThumbnailGrid.vue";
+import PreviewPane from "@/components/common/PreviewPane.vue";
+import SvgIcon from "@/components/common/SvgIcon.vue";
+import ImageViewer from "@/components/viewer/ImageViewer.vue";
+import MediaPlayer from "@/components/viewer/MediaPlayer.vue";
+import TextViewer from "@/components/viewer/TextViewer.vue";
+import { useBatchImageTranslation } from "@/composables/useBatchImageTranslation";
+import { useImageDimensions } from "@/composables/useImageDimensions";
+import { useVideoDimensions } from "@/composables/useVideoDimensions";
+import { useObjectUrls } from "@/composables/useObjectUrls";
+import { useResizableMediaPanes } from "@/composables/useResizableMediaPanes";
+import { createImageThumbnail } from "@/services/imageThumbnail";
+import { createBatchTranslationRun } from "@/services/imageTranslation/batchTranslationSources";
+import {
+  deleteTranslationSidecar,
+  loadTranslationSidecar,
+  requestTranslationSidecarPermission,
+  saveTranslationSidecar,
+  type TranslationSidecarTarget,
+} from "@/services/imageTranslation/translationSidecar";
+import {
+  pickTranslationSourceDirectory,
+  TranslationSourceDirectoryMismatchError,
+  type TranslationDirectoryPicker,
+} from "@/services/imageTranslation/translationSourceDirectory";
 import {
   extractArchiveEntry,
   getFileHandleLookupKey,
@@ -39,25 +54,9 @@ import {
   loadDirectoryHandle,
   loadDirectoryLevel,
   loadSelectedFiles,
-} from '@/services/mediaSources'
-import { createImageThumbnail } from '@/services/imageThumbnail'
-import { createBatchTranslationRun } from '@/services/imageTranslation/batchTranslationSources'
-import {
-  deleteTranslationSidecar,
-  loadTranslationSidecar,
-  requestTranslationSidecarPermission,
-  saveTranslationSidecar,
-  type TranslationSidecarTarget,
-} from '@/services/imageTranslation/translationSidecar'
-import {
-  pickTranslationSourceDirectory,
-  TranslationSourceDirectoryMismatchError,
-  type TranslationDirectoryPicker,
-} from '@/services/imageTranslation/translationSourceDirectory'
-import type { ImageTranslationResult } from '@/types/imageTranslation'
-import type {
-  BatchTranslationOptions,
-} from '@/types/batchTranslation'
+} from "@/services/mediaSources";
+import type { BatchTranslationOptions } from "@/types/batchTranslation";
+import type { ImageTranslationResult } from "@/types/imageTranslation";
 import type {
   ArchiveIndex,
   MediaCollection,
@@ -68,7 +67,7 @@ import type {
   MediaSortKey,
   MediaViewMode,
   PlayableItem,
-} from '@/types/media'
+} from "@/types/media";
 import {
   CONTENT_FILE_ACCEPT,
   formatBytes,
@@ -78,117 +77,142 @@ import {
   isImageMediaItem,
   isPlayableItem,
   naturalCompare,
+  setMediaDuration,
   sortMediaItems,
-} from '@/utils/media'
-import { isMacOS } from '@/utils/platform'
+} from "@/utils/media";
+import { isMacOS } from "@/utils/platform";
 import {
-  readTranslationEnabledPreference,
-  readTranslationEnginePreference,
   readAppleTranslationModelPreference,
   readOcrEnginePreference,
+  readTranslationEnabledPreference,
+  readTranslationEnginePreference,
   readViewerSlideshowPreference,
-  writeTranslationEnabledPreference,
-  writeTranslationEnginePreference,
   writeAppleTranslationModelPreference,
   writeOcrEnginePreference,
+  writeTranslationEnabledPreference,
+  writeTranslationEnginePreference,
   writeViewerSlideshowPreference,
   type ViewerSlideshowPreference,
-} from '@/utils/viewerPreferences'
+} from "@/utils/viewerPreferences";
 
-const FILE_LIST_COLUMNS_STORAGE_KEY = 'websee-file-list-columns'
+const FILE_LIST_COLUMNS_STORAGE_KEY = "websee-file-list-columns";
 const DEFAULT_FILE_LIST_COLUMNS = {
   size: true,
   format: true,
   resolution: true,
   modified: true,
-} satisfies MediaListColumnVisibility
+} satisfies MediaListColumnVisibility;
 
-const collection = ref<MediaCollection>()
-const selectedDirectory = ref('')
-const selectedItemId = ref<string>()
-const viewMode = ref<MediaViewMode>(readViewMode())
-const sortKey = ref<MediaSortKey>(readSortKey())
-const sortAscending = ref(readBooleanPreference('websee-sort-ascending', true))
-const fileListColumns = reactive<MediaListColumnVisibility>(readFileListColumns())
+const collection = ref<MediaCollection>();
+const selectedDirectory = ref("");
+const selectedItemId = ref<string>();
+const viewMode = ref<MediaViewMode>(readViewMode());
+const sortKey = ref<MediaSortKey>(readSortKey());
+const sortAscending = ref(readBooleanPreference("websee-sort-ascending", true));
+const showToolbarLabels = ref(readBooleanPreference("websee-toolbar-labels", true));
+const fileListColumns = reactive<MediaListColumnVisibility>(
+  readFileListColumns(),
+);
 const viewerSlideshowPreference = reactive<ViewerSlideshowPreference>(
   readViewerSlideshowPreference(localStorage),
-)
-const translationEnabled = ref(readTranslationEnabledPreference(localStorage))
-const macosPlatform = isMacOS()
-const translationEngine = ref(readTranslationEnginePreference(localStorage, macosPlatform))
-const appleTranslationModel = ref(readAppleTranslationModelPreference(localStorage))
-const ocrEngine = ref(readOcrEnginePreference(localStorage, macosPlatform))
-const viewerOpen = ref(false)
-const playbackItem = ref<PlayableItem>()
-const textViewerItem = ref<MediaItem>()
-const viewerItems = ref<MediaItem[]>([])
-const viewerCurrentId = ref<string>()
-const viewerSource = ref<'folder' | 'archive'>('folder')
-const archiveIndex = ref<ArchiveIndex>()
-const archiveOuterItemId = ref<string>()
-const selectedArchiveDirectory = ref('')
-const pendingTreeNodeId = ref<string>()
-const browserTreeNodeId = ref<string>()
-const requestedExpandedTreeNodeId = ref<string>()
-const archiveSelectedItemId = ref<string>()
-const archivePreviewItemId = ref<string>()
-const archivePreviewLoading = ref(false)
-const archiveIndexing = ref(false)
-const archiveIndexingCompleted = ref(0)
-const archiveIndexingTotal = ref(0)
-const initialSlideshow = ref(false)
-const helpOpen = ref(false)
-const fileInfo = shallowRef<{ item: MediaItem; path: string }>()
-const optionsOpen = ref(false)
-const batchTranslationDialogOpen = ref(false)
-const loading = ref(false)
-const loadingMessage = ref('파일을 읽는 중입니다...')
-const errorMessage = ref('')
-const dragActive = ref(false)
-const folderInput = ref<HTMLInputElement>()
-const fileInput = ref<HTMLInputElement>()
-const archiveInput = ref<HTMLInputElement>()
-const mediaBrowser = ref<HTMLElement>()
-const thumbnailGrid = ref<{ moveSelectionByKey: (key: string) => boolean }>()
-const currentDirectoryHandle = shallowRef<FileSystemDirectoryHandle>()
-let dragDepth = 0
-let archiveExtractionRequest = 0
-let archivePreviewRequest = 0
-let archivePreviewTimer: number | undefined
-let archiveIndexingRun = 0
-let pendingFolderRefresh: CollectionRestoreState | undefined
-const directoryHandleCache = shallowReactive(new Map<string, FileSystemDirectoryHandle>())
-let batchTranslationContext: BatchTranslationContext | undefined
-const directoryLoadRequests = new Map<string, Promise<void>>()
-let directoryCollectionGeneration = 0
-let directoryNavigationRequest = 0
+);
+const translationEnabled = ref(readTranslationEnabledPreference(localStorage));
+const macosPlatform = isMacOS();
+const translationEngine = ref(
+  readTranslationEnginePreference(localStorage, macosPlatform),
+);
+const appleTranslationModel = ref(
+  readAppleTranslationModelPreference(localStorage),
+);
+const ocrEngine = ref(readOcrEnginePreference(localStorage, macosPlatform));
+const viewerOpen = ref(false);
+const playbackItem = ref<PlayableItem>();
+const textViewerItem = ref<MediaItem>();
+const viewerItems = ref<MediaItem[]>([]);
+const viewerCurrentId = ref<string>();
+const viewerSource = ref<"folder" | "archive">("folder");
+const archiveIndex = ref<ArchiveIndex>();
+const archiveOuterItemId = ref<string>();
+const selectedArchiveDirectory = ref("");
+const pendingTreeNodeId = ref<string>();
+const browserTreeNodeId = ref<string>();
+const requestedExpandedTreeNodeId = ref<string>();
+const archiveSelectedItemId = ref<string>();
+const archivePreviewItemId = ref<string>();
+const archivePreviewLoading = ref(false);
+const archiveIndexing = ref(false);
+const archiveIndexingCompleted = ref(0);
+const archiveIndexingTotal = ref(0);
+const initialSlideshow = ref(false);
+const helpOpen = ref(false);
+const fileInfo = shallowRef<{ item: MediaItem; path: string }>();
+const optionsOpen = ref(false);
+const batchTranslationDialogOpen = ref(false);
+const loading = ref(false);
+const loadingMessage = ref("파일을 읽는 중입니다...");
+const errorMessage = ref("");
+const dragActive = ref(false);
+const folderInput = ref<HTMLInputElement>();
+const fileInput = ref<HTMLInputElement>();
+const archiveInput = ref<HTMLInputElement>();
+const mediaBrowser = ref<HTMLElement>();
+const thumbnailGrid = ref<InstanceType<typeof ThumbnailGrid>>();
+const fileList = ref<InstanceType<typeof FileList>>();
+const browserViewport = computed(() => {
+  const browser = viewMode.value === "grid" ? thumbnailGrid.value : fileList.value;
+  return browser?.viewportItems ?? [];
+});
+const sevenZipViewport = computed(() => archiveIndex.value?.format === "7z" ? browserViewport.value : []);
+const currentDirectoryHandle = shallowRef<FileSystemDirectoryHandle>();
+let dragDepth = 0;
+let archiveExtractionRequest = 0;
+let pendingArchiveOpen: symbol | undefined;
+let archivePreviewRequest = 0;
+let archivePreviewTimer: number | undefined;
+let archiveIndexingRun = 0;
+let pendingThumbnailIds = new Set<string>();
+let pendingFolderRefresh: CollectionRestoreState | undefined;
+const directoryHandleCache = shallowReactive(
+  new Map<string, FileSystemDirectoryHandle>(),
+);
+let batchTranslationContext: BatchTranslationContext | undefined;
+const directoryLoadRequests = new Map<string, Promise<void>>();
+let directoryCollectionGeneration = 0;
+let directoryNavigationRequest = 0;
 
 interface CollectionRestoreState {
-  directoryPath: string
-  itemPath?: string
+  directoryPath: string;
+  itemPath?: string;
 }
 
 interface BatchTranslationContext {
-  collection: MediaCollection
-  directoryPath: string
+  collection: MediaCollection;
+  directoryPath: string;
 }
 
 interface UseCollectionOptions {
-  directoryHandle?: FileSystemDirectoryHandle
-  directoryHandles?: Map<string, FileSystemDirectoryHandle>
-  restore?: CollectionRestoreState
+  directoryHandle?: FileSystemDirectoryHandle;
+  directoryHandles?: Map<string, FileSystemDirectoryHandle>;
+  restore?: CollectionRestoreState;
 }
 
-const ARCHIVE_ENTRY_CACHE_LIMIT = 3
-const ARCHIVE_AUTO_PREVIEW_MAX_ENTRY_SIZE = 128 * 1024 * 1024
-const DIRECTORY_PLACEHOLDER_FILE = new File([], 'directory', { lastModified: 0 })
-const archiveEntryFiles = new Map<string, File>()
-const archiveEntryRequests = new Map<string, Promise<File>>()
-const archiveEntryCacheOrder: string[] = []
-const archiveThumbnailUrls = reactive(new Map<string, string>())
+const ARCHIVE_ENTRY_CACHE_LIMIT = 3;
+const ARCHIVE_AUTO_PREVIEW_MAX_ENTRY_SIZE = 128 * 1024 * 1024;
+const DIRECTORY_PLACEHOLDER_FILE = new File([], "directory", {
+  lastModified: 0,
+});
+const archiveEntryFiles = new Map<string, File>();
+const archiveEntryRequests = new Map<string, Promise<File>>();
+const archiveEntryCacheOrder: string[] = [];
+const archiveThumbnailUrls = reactive(new Map<string, string>());
 
-const { getUrl, revokeAll, revokeItems } = useObjectUrls()
-const { ensureDimensions } = useImageDimensions(getUrl)
+const { getUrl, revokeAll, revokeItems } = useObjectUrls();
+const { ensureDimensions } = useImageDimensions(getUrl);
+useVideoDimensions(
+  () => viewMode.value === "list" && !fileListColumns.resolution ? [] : browserViewport.value,
+  loadItemFile,
+  ARCHIVE_AUTO_PREVIEW_MAX_ENTRY_SIZE,
+);
 const {
   active: batchTranslationActive,
   continueTranslation: continueBatchTranslation,
@@ -198,7 +222,11 @@ const {
   start: startBatchTranslation,
   state: batchTranslationState,
   stop: stopBatchTranslation,
-} = useBatchImageTranslation(() => translationEngine.value, () => appleTranslationModel.value, () => ocrEngine.value)
+} = useBatchImageTranslation(
+  () => translationEngine.value,
+  () => appleTranslationModel.value,
+  () => ocrEngine.value,
+);
 const {
   endResize,
   paneStyle,
@@ -213,60 +241,68 @@ const {
   sidebarMinWidth,
   sidebarWidth,
   startResize,
-} = useResizableMediaPanes(mediaBrowser)
+} = useResizableMediaPanes(mediaBrowser);
 
 const directoryItems = computed(() => {
-  if (!collection.value) return []
-  return collection.value.items.filter((item) => item.directoryPath === selectedDirectory.value)
-})
+  if (!collection.value) return [];
+  return collection.value.items.filter(
+    (item) => item.directoryPath === selectedDirectory.value,
+  );
+});
 const visibleItems = computed(() =>
   sortMediaItems(directoryItems.value, sortKey.value, sortAscending.value),
-)
+);
 const selectedDirectoryNode = computed(() =>
-  collection.value ? findDirectoryNode(collection.value.tree, selectedDirectory.value) : undefined,
-)
+  collection.value
+    ? findDirectoryNode(collection.value.tree, selectedDirectory.value)
+    : undefined,
+);
 const childFolderItems = computed(() =>
   (selectedDirectoryNode.value?.children ?? [])
-    .filter((node) => node.kind === 'folder')
+    .filter((node) => node.kind === "folder")
     .map((node) => createFolderItem(node, selectedDirectory.value)),
-)
+);
 const folderParentItem = computed<MediaItem | undefined>(() => {
-  if (!collection.value || !selectedDirectory.value) return undefined
-  const file = collection.value.items[0]?.file ?? DIRECTORY_PLACEHOLDER_FILE
+  if (!collection.value || !selectedDirectory.value) return undefined;
+  const file = collection.value.items[0]?.file ?? DIRECTORY_PLACEHOLDER_FILE;
 
   return {
     id: `folder-parent:${selectedDirectory.value}`,
-    kind: 'folder-parent',
-    name: '..',
-    path: '상위 폴더로',
+    kind: "folder-parent",
+    name: "..",
+    path: "상위 폴더로",
     directoryPath: selectedDirectory.value,
     file,
     size: 0,
-    format: '상위 폴더',
+    format: "상위 폴더",
     lastModified: file.lastModified,
     navigationPath: getDirectoryPath(selectedDirectory.value),
-  }
-})
+  };
+});
 const folderBrowserItems = computed(() => {
   const items = sortMediaItems(
     [...childFolderItems.value, ...directoryItems.value],
     sortKey.value,
     sortAscending.value,
-  )
-  return folderParentItem.value ? [folderParentItem.value, ...items] : items
-})
+  );
+  return folderParentItem.value ? [folderParentItem.value, ...items] : items;
+});
 const selectedItem = computed(() =>
   collection.value?.items.find((item) => item.id === selectedItemId.value),
-)
-const archiveBrowsing = computed(() => archiveIndex.value !== undefined)
+);
+const archiveBrowsing = computed(() => archiveIndex.value !== undefined);
 const archiveItems = computed(() =>
-  sortMediaItems(archiveIndex.value?.items ?? [], sortKey.value, sortAscending.value),
-)
+  sortMediaItems(
+    archiveIndex.value?.items ?? [],
+    sortKey.value,
+    sortAscending.value,
+  ),
+);
 const archiveDirectoryNode = computed(() =>
   archiveIndex.value
     ? findDirectoryNode(archiveIndex.value.tree, selectedArchiveDirectory.value)
     : undefined,
-)
+);
 const archiveDirectoryItems = computed(() =>
   sortMediaItems(
     (archiveIndex.value?.items ?? []).filter(
@@ -275,188 +311,210 @@ const archiveDirectoryItems = computed(() =>
     sortKey.value,
     sortAscending.value,
   ),
-)
+);
 const archiveChildFolderItems = computed(() =>
   (archiveDirectoryNode.value?.children ?? [])
-    .filter((node) => node.kind === 'folder')
+    .filter((node) => node.kind === "folder")
     .map(createArchiveFolderItem),
-)
+);
 const archiveParentItem = computed<MediaItem | undefined>(() => {
-  const index = archiveIndex.value
-  const outerItemId = archiveOuterItemId.value
-  if (!index || !outerItemId) return undefined
+  const index = archiveIndex.value;
+  const outerItemId = archiveOuterItemId.value;
+  if (!index || !outerItemId) return undefined;
 
   return {
     id: `archive-parent:${outerItemId}:${selectedArchiveDirectory.value}`,
-    kind: 'archive-parent',
-    name: '..',
-    path: '상위 폴더로',
+    kind: "archive-parent",
+    name: "..",
+    path: "상위 폴더로",
     directoryPath: selectedArchiveDirectory.value,
     file: index.archiveFile,
     size: 0,
-    format: '상위 폴더',
+    format: "상위 폴더",
     lastModified: index.archiveFile.lastModified,
     navigationPath: getDirectoryPath(selectedArchiveDirectory.value),
-  }
-})
+  };
+});
 const archiveBrowserItems = computed(() => {
   const items = sortMediaItems(
     [...archiveChildFolderItems.value, ...archiveDirectoryItems.value],
     sortKey.value,
     sortAscending.value,
-  )
-  return archiveParentItem.value ? [archiveParentItem.value, ...items] : items
-})
+  );
+  return archiveParentItem.value ? [archiveParentItem.value, ...items] : items;
+});
 const browserItems = computed(() =>
-  archiveBrowsing.value
-    ? archiveBrowserItems.value
-    : folderBrowserItems.value,
-)
+  archiveBrowsing.value ? archiveBrowserItems.value : folderBrowserItems.value,
+);
 const statusItems = computed(() =>
   archiveBrowsing.value ? archiveDirectoryItems.value : directoryItems.value,
-)
-const statusImageCount = computed(() =>
-  statusItems.value.filter(
-    (item) => item.kind === 'image' || item.kind === 'archive-entry',
-  ).length,
-)
-const statusTotalCount = computed(() =>
-  browserItems.value.filter(
-    (item) => item.kind !== 'folder-parent' && item.kind !== 'archive-parent',
-  ).length,
-)
+);
+const statusImageCount = computed(
+  () =>
+    statusItems.value.filter(
+      (item) => item.kind === "image" || item.kind === "archive-entry",
+    ).length,
+);
+const statusTotalCount = computed(
+  () =>
+    browserItems.value.filter(
+      (item) => item.kind !== "folder-parent" && item.kind !== "archive-parent",
+    ).length,
+);
 const archiveIndexingStatus = computed(() =>
   archiveBrowsing.value && archiveIndexing.value
     ? `미리보기 ${archiveIndexingCompleted.value}/${archiveIndexingTotal.value}`
     : undefined,
-)
+);
 const browserSelectedId = computed(() =>
   archiveBrowsing.value ? archiveSelectedItemId.value : selectedItemId.value,
-)
+);
 const selectedTreeNodeId = computed(() => {
-  if (pendingTreeNodeId.value) return pendingTreeNodeId.value
-  if (browserTreeNodeId.value) return browserTreeNodeId.value
-  const outerItemId = archiveOuterItemId.value
-  if (!archiveBrowsing.value || !outerItemId) return `folder:${selectedDirectory.value}`
+  if (pendingTreeNodeId.value) return pendingTreeNodeId.value;
+  if (browserTreeNodeId.value) return browserTreeNodeId.value;
+  const outerItemId = archiveOuterItemId.value;
+  if (!archiveBrowsing.value || !outerItemId)
+    return `folder:${selectedDirectory.value}`;
   return selectedArchiveDirectory.value
     ? `archive-directory:${outerItemId}:${selectedArchiveDirectory.value}`
-    : `archive:${outerItemId}`
-})
+    : `archive:${outerItemId}`;
+});
 const selectedBrowserItem = computed(() =>
   browserItems.value.find((item) => item.id === browserSelectedId.value),
-)
+);
 const selectedFile = computed(() => {
-  const item = selectedBrowserItem.value
-  if (!item || item.kind === 'folder' || item.kind === 'folder-parent' || item.kind === 'archive-parent') return
-  return item
-})
+  const item = selectedBrowserItem.value;
+  if (
+    !item ||
+    item.kind === "folder" ||
+    item.kind === "folder-parent" ||
+    item.kind === "archive-parent"
+  )
+    return;
+  return item;
+});
 const selectedStatusPath = computed(() => {
-  const item = selectedBrowserItem.value
-  const activeCollection = collection.value
-  if (!item || !activeCollection) return undefined
+  const item = selectedBrowserItem.value;
+  const activeCollection = collection.value;
+  if (!item || !activeCollection) return undefined;
 
-  const parts: string[] = []
-  if (activeCollection.kind === 'folder') parts.push(activeCollection.name)
+  const parts: string[] = [];
+  if (activeCollection.kind === "folder") parts.push(activeCollection.name);
 
   if (archiveBrowsing.value) {
     const archiveItem = archiveOuterItemId.value
-      ? activeCollection.items.find((candidate) => candidate.id === archiveOuterItemId.value)
-      : undefined
-    if (archiveItem?.path) parts.push(archiveItem.path)
-    const archivePath = item.kind === 'archive-parent' ? item.navigationPath : item.path
-    if (archivePath) parts.push(archivePath)
+      ? activeCollection.items.find(
+          (candidate) => candidate.id === archiveOuterItemId.value,
+        )
+      : undefined;
+    if (archiveItem?.path) parts.push(archiveItem.path);
+    const archivePath =
+      item.kind === "archive-parent" ? item.navigationPath : item.path;
+    if (archivePath) parts.push(archivePath);
   } else {
-    const itemPath = item.kind === 'folder-parent' ? item.navigationPath : item.path
-    if (itemPath) parts.push(itemPath)
+    const itemPath =
+      item.kind === "folder-parent" ? item.navigationPath : item.path;
+    if (itemPath) parts.push(itemPath);
   }
 
-  return parts.join('/') || item.name
-})
+  return parts.join("/") || item.name;
+});
 const selectedTextPreviewItem = computed(() => {
-  const item = selectedBrowserItem.value
-  if (item?.kind === 'text') return item
-  if (item?.kind === 'archive-text-entry' && item.id === archivePreviewItemId.value) return item
-  return undefined
-})
-const canOpenViewer = computed(() => browserItems.value.length > 0)
+  const item = selectedBrowserItem.value;
+  if (item?.kind === "text") return item;
+  if (
+    item?.kind === "archive-text-entry" &&
+    item.id === archivePreviewItemId.value
+  )
+    return item;
+  return undefined;
+});
+const canOpenViewer = computed(() => browserItems.value.length > 0);
 const canRefreshCollection = computed(() =>
-  Boolean(currentDirectoryHandle.value || collection.value?.kind === 'folder'),
-)
+  Boolean(currentDirectoryHandle.value || collection.value?.kind === "folder"),
+);
 const batchSourceItems = computed(() =>
   (collection.value?.items ?? []).filter(
-    (item) => item.directoryPath === selectedDirectory.value
-      && (item.kind === 'image' || item.kind === 'archive'),
+    (item) =>
+      item.directoryPath === selectedDirectory.value &&
+      (item.kind === "image" || item.kind === "archive"),
   ),
-)
+);
 const batchSelectableItems = computed(() =>
   sortMediaItems(batchSourceItems.value, sortKey.value, sortAscending.value),
-)
-const batchImageCount = computed(() =>
-  batchSourceItems.value.filter((item) => item.kind === 'image').length,
-)
-const batchArchiveCount = computed(() =>
-  batchSourceItems.value.filter((item) => item.kind === 'archive').length,
-)
+);
+const batchImageCount = computed(
+  () => batchSourceItems.value.filter((item) => item.kind === "image").length,
+);
+const batchArchiveCount = computed(
+  () => batchSourceItems.value.filter((item) => item.kind === "archive").length,
+);
 const batchInitialSelectedItemId = computed(() => {
   const selectedId = archiveBrowsing.value
     ? archiveOuterItemId.value
-    : selectedBrowserItem.value?.id
+    : selectedBrowserItem.value?.id;
   return batchSourceItems.value.some((item) => item.id === selectedId)
     ? selectedId
-    : undefined
-})
-const batchFolderLabel = computed(() =>
-  selectedDirectoryNode.value?.name ?? collection.value?.name ?? '현재 폴더',
-)
-const canBatchTranslate = computed(() =>
-  translationEnabled.value
-  && (
-    batchTranslationActive.value
-    || Boolean(directoryHandleCache.get(selectedDirectory.value))
-  ),
-)
+    : undefined;
+});
+const batchFolderLabel = computed(
+  () =>
+    selectedDirectoryNode.value?.name ?? collection.value?.name ?? "현재 폴더",
+);
+const canBatchTranslate = computed(
+  () =>
+    translationEnabled.value &&
+    (batchTranslationActive.value ||
+      Boolean(directoryHandleCache.get(selectedDirectory.value))),
+);
 
 function readViewMode(): MediaViewMode {
-  return localStorage.getItem('websee-view-mode') === 'list' ? 'list' : 'grid'
+  return localStorage.getItem("websee-view-mode") === "list" ? "list" : "grid";
 }
 
 function readSortKey(): MediaSortKey {
-  const value = localStorage.getItem('websee-sort-key')
-  return value === 'size' || value === 'format' || value === 'modified' ? value : 'name'
+  const value = localStorage.getItem("websee-sort-key");
+  return value === "size" || value === "format" || value === "modified"
+    ? value
+    : "name";
 }
 
 function readBooleanPreference(key: string, fallback: boolean): boolean {
-  const value = localStorage.getItem(key)
-  return value === null ? fallback : value === 'true'
+  const value = localStorage.getItem(key);
+  return value === null ? fallback : value === "true";
 }
 
 function readFileListColumns(): MediaListColumnVisibility {
-  const storedValue = localStorage.getItem(FILE_LIST_COLUMNS_STORAGE_KEY)
-  if (!storedValue) return { ...DEFAULT_FILE_LIST_COLUMNS }
+  const storedValue = localStorage.getItem(FILE_LIST_COLUMNS_STORAGE_KEY);
+  if (!storedValue) return { ...DEFAULT_FILE_LIST_COLUMNS };
 
   try {
-    const parsed: unknown = JSON.parse(storedValue)
-    if (typeof parsed !== 'object' || parsed === null) {
-      return { ...DEFAULT_FILE_LIST_COLUMNS }
+    const parsed: unknown = JSON.parse(storedValue);
+    if (typeof parsed !== "object" || parsed === null) {
+      return { ...DEFAULT_FILE_LIST_COLUMNS };
     }
 
-    const storedColumns = parsed as Record<string, unknown>
+    const storedColumns = parsed as Record<string, unknown>;
     return {
-      size: typeof storedColumns.size === 'boolean'
-        ? storedColumns.size
-        : DEFAULT_FILE_LIST_COLUMNS.size,
-      format: typeof storedColumns.format === 'boolean'
-        ? storedColumns.format
-        : DEFAULT_FILE_LIST_COLUMNS.format,
-      resolution: typeof storedColumns.resolution === 'boolean'
-        ? storedColumns.resolution
-        : DEFAULT_FILE_LIST_COLUMNS.resolution,
-      modified: typeof storedColumns.modified === 'boolean'
-        ? storedColumns.modified
-        : DEFAULT_FILE_LIST_COLUMNS.modified,
-    }
+      size:
+        typeof storedColumns.size === "boolean"
+          ? storedColumns.size
+          : DEFAULT_FILE_LIST_COLUMNS.size,
+      format:
+        typeof storedColumns.format === "boolean"
+          ? storedColumns.format
+          : DEFAULT_FILE_LIST_COLUMNS.format,
+      resolution:
+        typeof storedColumns.resolution === "boolean"
+          ? storedColumns.resolution
+          : DEFAULT_FILE_LIST_COLUMNS.resolution,
+      modified:
+        typeof storedColumns.modified === "boolean"
+          ? storedColumns.modified
+          : DEFAULT_FILE_LIST_COLUMNS.modified,
+    };
   } catch {
-    return { ...DEFAULT_FILE_LIST_COLUMNS }
+    return { ...DEFAULT_FILE_LIST_COLUMNS };
   }
 }
 
@@ -464,62 +522,68 @@ function findDirectoryNode(
   node: MediaDirectoryNode,
   path: string,
 ): MediaDirectoryNode | undefined {
-  if (node.kind === 'folder' && node.path === path) return node
+  if (node.kind === "folder" && node.path === path) return node;
   for (const child of node.children) {
-    const match = findDirectoryNode(child, path)
-    if (match) return match
+    const match = findDirectoryNode(child, path);
+    if (match) return match;
   }
-  return undefined
+  return undefined;
 }
 
-function createFolderItem(node: MediaDirectoryNode, parentPath: string): MediaItem {
-  const file = collection.value?.items.find(
-    (item) => item.path === node.path || item.path.startsWith(`${node.path}/`),
-  )?.file ?? DIRECTORY_PLACEHOLDER_FILE
+function createFolderItem(
+  node: MediaDirectoryNode,
+  parentPath: string,
+): MediaItem {
+  const file =
+    collection.value?.items.find(
+      (item) =>
+        item.path === node.path || item.path.startsWith(`${node.path}/`),
+    )?.file ?? DIRECTORY_PLACEHOLDER_FILE;
 
   return {
     id: `folder:${node.path}`,
-    kind: 'folder',
+    kind: "folder",
     name: node.name,
     path: node.path,
     directoryPath: parentPath,
     file,
     size: 0,
-    format: '폴더',
+    format: "폴더",
     lastModified: file.lastModified,
     navigationPath: node.path,
-  }
+  };
 }
 
 function createArchiveFolderItem(node: MediaDirectoryNode): MediaItem {
-  const index = archiveIndex.value
-  const outerItemId = archiveOuterItemId.value
-  if (!index || !outerItemId) throw new Error('Archive folder context is missing.')
+  const index = archiveIndex.value;
+  const outerItemId = archiveOuterItemId.value;
+  if (!index || !outerItemId)
+    throw new Error("Archive folder context is missing.");
 
   return {
     id: `archive-folder:${outerItemId}:${node.path}`,
-    kind: 'folder',
+    kind: "folder",
     name: node.name,
     path: node.path,
     directoryPath: selectedArchiveDirectory.value,
     file: index.archiveFile,
     size: 0,
-    format: '폴더',
+    format: "폴더",
     lastModified: index.archiveFile.lastModified,
     navigationPath: node.path,
-  }
+  };
 }
 
 function findTreeNodeById(
   node: MediaDirectoryNode,
   id: string,
 ): MediaDirectoryNode | undefined {
-  if (node.id === id) return node
+  if (node.id === id) return node;
   for (const child of node.children) {
-    const match = findTreeNodeById(child, id)
-    if (match) return match
+    const match = findTreeNodeById(child, id);
+    if (match) return match;
   }
-  return undefined
+  return undefined;
 }
 
 function createArchiveDirectoryTreeNode(
@@ -528,703 +592,800 @@ function createArchiveDirectoryTreeNode(
 ): MediaDirectoryNode {
   return {
     id: `archive-directory:${archiveItemId}:${node.path}`,
-    kind: 'archive-directory',
+    kind: "archive-directory",
     name: node.name,
     path: node.path,
     directCount: node.directCount,
     children: node.children.map((child) =>
-      createArchiveDirectoryTreeNode(child, archiveItemId)),
+      createArchiveDirectoryTreeNode(child, archiveItemId),
+    ),
     archiveItemId,
     indexed: true,
-  }
+  };
 }
 
 function syncArchiveTree(item: MediaItem, index: ArchiveIndex): void {
-  const tree = collection.value?.tree
-  if (!tree) return
-  const archiveNode = findTreeNodeById(tree, `archive:${item.id}`)
-  if (!archiveNode) return
+  const tree = collection.value?.tree;
+  if (!tree) return;
+  const archiveNode = findTreeNodeById(tree, `archive:${item.id}`);
+  if (!archiveNode) return;
 
-  archiveNode.directCount = index.tree.directCount
+  archiveNode.directCount = index.tree.directCount;
   archiveNode.children = index.tree.children.map((node) =>
-    createArchiveDirectoryTreeNode(node, item.id))
-  archiveNode.indexed = true
+    createArchiveDirectoryTreeNode(node, item.id),
+  );
+  archiveNode.indexed = true;
 }
 
 function getArchiveThumbnailUrl(item: MediaItem): string | undefined {
-  return item.kind === 'archive-entry' ? archiveThumbnailUrls.get(item.id) : undefined
+  return item.kind === "archive-entry"
+    ? archiveThumbnailUrls.get(item.id)
+    : undefined;
 }
 
 function clearArchiveThumbnails(): void {
-  for (const url of archiveThumbnailUrls.values()) URL.revokeObjectURL(url)
-  archiveThumbnailUrls.clear()
+  for (const url of archiveThumbnailUrls.values()) URL.revokeObjectURL(url);
+  archiveThumbnailUrls.clear();
 }
 
 function cancelArchiveIndexing(): void {
-  archiveIndexingRun += 1
-  archiveIndexing.value = false
-  archiveIndexingCompleted.value = 0
-  archiveIndexingTotal.value = 0
+  archiveIndexingRun += 1;
+  pendingThumbnailIds.clear();
+  archiveIndexing.value = false;
+  archiveIndexingCompleted.value = 0;
+  archiveIndexingTotal.value = 0;
+}
+
+function cancelArchiveOpen(): void {
+  if (!pendingArchiveOpen) return;
+  pendingArchiveOpen = undefined;
+  loading.value = false;
 }
 
 function disposeArchiveBrowser(): void {
-  archiveExtractionRequest += 1
-  cancelArchivePreview()
-  cancelArchiveIndexing()
-  clearArchiveThumbnails()
+  cancelArchiveOpen();
+  archiveExtractionRequest += 1;
+  cancelArchivePreview();
+  cancelArchiveIndexing();
+  clearArchiveThumbnails();
 
   if (archiveIndex.value) {
-    revokeItems(archiveIndex.value.items)
-    for (const item of archiveIndex.value.items) item.file = archiveIndex.value.archiveFile
+    if (archiveIndex.value.format === "7z") archiveIndex.value.release();
+    revokeItems(archiveIndex.value.items);
+    for (const item of archiveIndex.value.items)
+      item.file = archiveIndex.value.archiveFile;
   }
 
-  archiveEntryFiles.clear()
-  archiveEntryRequests.clear()
-  archiveEntryCacheOrder.splice(0)
-  archiveIndex.value = undefined
-  archiveOuterItemId.value = undefined
-  selectedArchiveDirectory.value = ''
-  archiveSelectedItemId.value = undefined
+  archiveEntryFiles.clear();
+  archiveEntryRequests.clear();
+  archiveEntryCacheOrder.splice(0);
+  archiveIndex.value = undefined;
+  archiveOuterItemId.value = undefined;
+  selectedArchiveDirectory.value = "";
+  archiveSelectedItemId.value = undefined;
 }
 
 function leaveArchiveBrowser(): void {
-  const outerItemId = archiveOuterItemId.value
-  closeViewer()
-  closeTextViewer()
-  playbackItem.value = undefined
-  disposeArchiveBrowser()
-  selectedItemId.value = outerItemId
-  browserTreeNodeId.value = outerItemId ? `archive:${outerItemId}` : undefined
+  const outerItemId = archiveOuterItemId.value;
+  closeViewer();
+  closeTextViewer();
+  playbackItem.value = undefined;
+  disposeArchiveBrowser();
+  selectedItemId.value = outerItemId;
+  browserTreeNodeId.value = outerItemId ? `archive:${outerItemId}` : undefined;
 }
 
 function ensureFolderLoaded(node: MediaDirectoryNode): Promise<void> {
-  if (node.kind !== 'folder' || node.loaded !== false) return Promise.resolve()
+  if (node.kind !== "folder" || node.loaded !== false) return Promise.resolve();
 
-  const existingRequest = directoryLoadRequests.get(node.path)
-  if (existingRequest) return existingRequest
+  const existingRequest = directoryLoadRequests.get(node.path);
+  if (existingRequest) return existingRequest;
 
-  const handle = directoryHandleCache.get(node.path)
-  const activeCollection = collection.value
-  const generation = directoryCollectionGeneration
-  if (!handle || !activeCollection) return Promise.resolve()
+  const handle = directoryHandleCache.get(node.path);
+  const activeCollection = collection.value;
+  const generation = directoryCollectionGeneration;
+  if (!handle || !activeCollection) return Promise.resolve();
 
-  node.loading = true
-  let request!: Promise<void>
+  node.loading = true;
+  let request!: Promise<void>;
   request = (async () => {
     try {
-      const level = await loadDirectoryLevel(handle, node.path)
+      const level = await loadDirectoryLevel(handle, node.path);
       if (
-        generation !== directoryCollectionGeneration
-        || collection.value !== activeCollection
-      ) return
+        generation !== directoryCollectionGeneration ||
+        collection.value !== activeCollection
+      )
+        return;
 
       for (const [path, childHandle] of level.handles) {
-        directoryHandleCache.set(path, childHandle)
+        directoryHandleCache.set(path, childHandle);
       }
-      activeCollection.items.push(...level.items)
-      node.children = level.children
-      node.directCount = level.items.length
-      node.loaded = true
-      node.expandable = level.children.length > 0
+      activeCollection.items.push(...level.items);
+      node.children = level.children;
+      node.directCount = level.items.length;
+      node.loaded = true;
+      node.expandable = level.children.length > 0;
     } catch (error) {
-      const message = describeError(error, `${node.name} 폴더를 읽지 못했습니다.`)
-      if (message) showError(message)
+      const message = describeError(
+        error,
+        `${node.name} 폴더를 읽지 못했습니다.`,
+      );
+      if (message) showError(message);
     } finally {
-      if (generation === directoryCollectionGeneration) node.loading = false
+      if (generation === directoryCollectionGeneration) node.loading = false;
       if (directoryLoadRequests.get(node.path) === request) {
-        directoryLoadRequests.delete(node.path)
+        directoryLoadRequests.delete(node.path);
       }
     }
-  })()
+  })();
 
-  directoryLoadRequests.set(node.path, request)
-  return request
+  directoryLoadRequests.set(node.path, request);
+  return request;
 }
 
-async function ensureDirectoryPathLoaded(path: string): Promise<MediaDirectoryNode | undefined> {
-  const root = collection.value?.tree
-  if (!root) return undefined
-  if (!path) return root
+async function ensureDirectoryPathLoaded(
+  path: string,
+): Promise<MediaDirectoryNode | undefined> {
+  const root = collection.value?.tree;
+  if (!root) return undefined;
+  if (!path) return root;
 
-  let currentNode = root
-  let currentPath = ''
-  for (const part of path.split('/').filter(Boolean)) {
-    await ensureFolderLoaded(currentNode)
-    currentPath = currentPath ? `${currentPath}/${part}` : part
+  let currentNode = root;
+  let currentPath = "";
+  for (const part of path.split("/").filter(Boolean)) {
+    await ensureFolderLoaded(currentNode);
+    currentPath = currentPath ? `${currentPath}/${part}` : part;
     const child = currentNode.children.find(
-      (candidate) => candidate.kind === 'folder' && candidate.path === currentPath,
-    )
-    if (!child) return undefined
-    currentNode = child
+      (candidate) =>
+        candidate.kind === "folder" && candidate.path === currentPath,
+    );
+    if (!child) return undefined;
+    currentNode = child;
   }
-  await ensureFolderLoaded(currentNode)
-  return currentNode
+  await ensureFolderLoaded(currentNode);
+  return currentNode;
 }
 
 async function useCollection(
   nextCollection: MediaCollection,
   options: UseCollectionOptions = {},
 ): Promise<void> {
-  closeViewer()
-  closeTextViewer()
-  playbackItem.value = undefined
-  disposeArchiveBrowser()
-  revokeAll()
-  fileInfo.value = undefined
-  directoryCollectionGeneration += 1
-  directoryNavigationRequest += 1
-  directoryLoadRequests.clear()
-  directoryHandleCache.clear()
+  closeViewer();
+  closeTextViewer();
+  playbackItem.value = undefined;
+  disposeArchiveBrowser();
+  revokeAll();
+  fileInfo.value = undefined;
+  directoryCollectionGeneration += 1;
+  directoryNavigationRequest += 1;
+  directoryLoadRequests.clear();
+  directoryHandleCache.clear();
   for (const [path, handle] of options.directoryHandles ?? []) {
-    directoryHandleCache.set(path, handle)
+    directoryHandleCache.set(path, handle);
   }
-  currentDirectoryHandle.value = options.directoryHandle
-  collection.value = nextCollection
+  currentDirectoryHandle.value = options.directoryHandle;
+  collection.value = nextCollection;
   const restoredNode = options.restore?.directoryPath
     ? await ensureDirectoryPathLoaded(options.restore.directoryPath)
-    : undefined
-  selectedDirectory.value = restoredNode?.path ?? ''
-  await nextTick()
-  selectedItemId.value = folderBrowserItems.value.find(
-    (item) => item.path === options.restore?.itemPath,
-  )?.id ?? folderBrowserItems.value[0]?.id
-  if (selectedItem.value) void ensureDimensions(selectedItem.value)
+    : undefined;
+  selectedDirectory.value = restoredNode?.path ?? "";
+  await nextTick();
+  selectedItemId.value =
+    folderBrowserItems.value.find(
+      (item) => item.path === options.restore?.itemPath,
+    )?.id ?? folderBrowserItems.value[0]?.id;
+  if (selectedItem.value) void ensureDimensions(selectedItem.value);
 }
 
 function showError(message: string): void {
-  errorMessage.value = message
+  errorMessage.value = message;
   window.setTimeout(() => {
-    if (errorMessage.value === message) errorMessage.value = ''
-  }, 6000)
+    if (errorMessage.value === message) errorMessage.value = "";
+  }, 6000);
 }
 
 function describeError(error: unknown, fallback: string): string {
-  if (error instanceof DOMException && error.name === 'AbortError') return ''
+  if (error instanceof DOMException && error.name === "AbortError") return "";
   if (error instanceof Error && /encrypted|password/i.test(error.message)) {
-    return '암호화된 압축파일은 지원하지 않습니다.'
+    return "암호화된 압축파일은 지원하지 않습니다.";
   }
-  if (error instanceof Error && /multi-volume|volume archive|multi-part/i.test(error.message)) {
-    return '분할 RAR 압축파일은 지원하지 않습니다.'
+  if (error instanceof Error && /7z.*memory/i.test(error.message)) {
+    return "이 7z 파일은 압축을 푸는 데 필요한 메모리가 너무 큽니다.";
   }
-  return fallback
+  if (
+    error instanceof Error &&
+    /multi-volume|volume archive|multi-part/i.test(error.message)
+  ) {
+    return "분할 RAR 압축파일은 지원하지 않습니다.";
+  }
+  return fallback;
 }
 
 async function openDirectory(): Promise<void> {
-  pendingFolderRefresh = undefined
+  pendingFolderRefresh = undefined;
   if (!window.showDirectoryPicker) {
-    folderInput.value?.click()
-    return
+    folderInput.value?.click();
+    return;
   }
 
   try {
-    const handle = await window.showDirectoryPicker()
-    loadingMessage.value = '폴더의 지원 파일을 찾는 중입니다...'
-    loading.value = true
-    const loadedDirectory = await loadDirectoryHandle(handle)
+    const handle = await window.showDirectoryPicker();
+    loadingMessage.value = "폴더의 지원 파일을 찾는 중입니다...";
+    loading.value = true;
+    const loadedDirectory = await loadDirectoryHandle(handle);
     await useCollection(loadedDirectory.collection, {
       directoryHandle: handle,
       directoryHandles: loadedDirectory.handles,
-    })
+    });
   } catch (error) {
-    const message = describeError(error, '폴더를 읽지 못했습니다. 접근 권한을 확인해주세요.')
-    if (message) showError(message)
+    const message = describeError(
+      error,
+      "폴더를 읽지 못했습니다. 접근 권한을 확인해주세요.",
+    );
+    if (message) showError(message);
   } finally {
-    loading.value = false
+    loading.value = false;
   }
 }
 
 async function handleFolderSelection(event: Event): Promise<void> {
-  const input = event.currentTarget
-  if (!(input instanceof HTMLInputElement) || !input.files?.length) return
+  const input = event.currentTarget;
+  if (!(input instanceof HTMLInputElement) || !input.files?.length) return;
 
-  loadingMessage.value = '폴더의 지원 파일을 정리하는 중입니다...'
-  loading.value = true
+  loadingMessage.value = "폴더의 지원 파일을 정리하는 중입니다...";
+  loading.value = true;
   try {
-    const nextCollection = loadSelectedFiles([...input.files])
-    const restore = pendingFolderRefresh
-    pendingFolderRefresh = undefined
-    await useCollection(nextCollection, { restore })
-    if (!nextCollection.items.length) showError('지원하는 파일이 없는 폴더입니다.')
+    const nextCollection = loadSelectedFiles([...input.files]);
+    const restore = pendingFolderRefresh;
+    pendingFolderRefresh = undefined;
+    await useCollection(nextCollection, { restore });
+    if (!nextCollection.items.length)
+      showError("지원하는 파일이 없는 폴더입니다.");
   } finally {
-    loading.value = false
-    input.value = ''
+    loading.value = false;
+    input.value = "";
   }
 }
 
 function getCollectionRestoreState(): CollectionRestoreState {
   const outerArchiveItem = archiveOuterItemId.value
-    ? collection.value?.items.find((item) => item.id === archiveOuterItemId.value)
-    : undefined
+    ? collection.value?.items.find(
+        (item) => item.id === archiveOuterItemId.value,
+      )
+    : undefined;
 
   return {
     directoryPath: selectedDirectory.value,
     itemPath: outerArchiveItem?.path ?? selectedBrowserItem.value?.path,
-  }
+  };
 }
 
 async function refreshCollection(): Promise<void> {
-  if (loading.value || !collection.value || !canRefreshCollection.value) return
+  if (loading.value || !collection.value || !canRefreshCollection.value) return;
 
-  const restore = getCollectionRestoreState()
-  const handle = currentDirectoryHandle.value
+  const restore = getCollectionRestoreState();
+  const handle = currentDirectoryHandle.value;
   if (!handle) {
-    pendingFolderRefresh = restore
-    folderInput.value?.click()
-    return
+    pendingFolderRefresh = restore;
+    folderInput.value?.click();
+    return;
   }
 
-  loadingMessage.value = '현재 폴더의 파일 목록을 새로고침하는 중입니다...'
-  loading.value = true
+  loadingMessage.value = "현재 폴더의 파일 목록을 새로고침하는 중입니다...";
+  loading.value = true;
   try {
-    const loadedDirectory = await loadDirectoryHandle(handle)
+    const loadedDirectory = await loadDirectoryHandle(handle);
     await useCollection(loadedDirectory.collection, {
       directoryHandle: handle,
       directoryHandles: loadedDirectory.handles,
       restore,
-    })
+    });
   } catch (error) {
-    const message = describeError(error, '파일 목록을 새로고침하지 못했습니다. 폴더 접근 권한을 확인해주세요.')
-    if (message) showError(message)
+    const message = describeError(
+      error,
+      "파일 목록을 새로고침하지 못했습니다. 폴더 접근 권한을 확인해주세요.",
+    );
+    if (message) showError(message);
   } finally {
-    loading.value = false
+    loading.value = false;
   }
 }
 
 async function handleFileSelection(event: Event): Promise<void> {
-  const input = event.currentTarget
-  if (!(input instanceof HTMLInputElement) || !input.files?.length) return
+  const input = event.currentTarget;
+  if (!(input instanceof HTMLInputElement) || !input.files?.length) return;
 
-  const selected = loadSelectedFiles([...input.files])
-  input.value = ''
-  await useCollection(selected)
-  const [item] = selected.items
-  if (selected.items.length === 1 && isPlayableItem(item)) openViewer(item.id)
+  const selected = loadSelectedFiles([...input.files]);
+  input.value = "";
+  await useCollection(selected);
+  const [item] = selected.items;
+  if (selected.items.length === 1 && isPlayableItem(item)) openViewer(item.id);
 }
 
 async function openArchiveFile(file: File): Promise<void> {
-  const nextCollection = loadSelectedFiles([file])
-  await useCollection(nextCollection)
-  const archiveItem = nextCollection.items[0]
-  if (archiveItem) await enterArchiveBrowser(archiveItem)
+  const nextCollection = loadSelectedFiles([file]);
+  await useCollection(nextCollection);
+  const archiveItem = nextCollection.items[0];
+  if (archiveItem) await enterArchiveBrowser(archiveItem);
 }
 
 async function handleArchiveSelection(event: Event): Promise<void> {
-  const input = event.currentTarget
-  if (!(input instanceof HTMLInputElement) || !input.files?.[0]) return
-  await openArchiveFile(input.files[0])
-  input.value = ''
+  const input = event.currentTarget;
+  if (!(input instanceof HTMLInputElement) || !input.files?.[0]) return;
+  await openArchiveFile(input.files[0]);
+  input.value = "";
 }
 
 interface DroppedFileSystemHandles {
-  directories: FileSystemDirectoryHandle[]
-  files: Map<string, FileSystemFileHandle>
+  directories: FileSystemDirectoryHandle[];
+  files: Map<string, FileSystemFileHandle>;
 }
 
 async function getDroppedFileSystemHandles(
   dataTransfer: DataTransfer,
 ): Promise<DroppedFileSystemHandles> {
   const handleRequests = [...dataTransfer.items]
-    .filter((item) => item.kind === 'file' && item.getAsFileSystemHandle)
+    .filter((item) => item.kind === "file" && item.getAsFileSystemHandle)
     .map((item) => ({
       file: item.getAsFile(),
       handle: item.getAsFileSystemHandle?.(),
-    }))
+    }));
   const entries = await Promise.all(
-    handleRequests.map(async ({ file, handle }) => ({ file, handle: await handle })),
-  )
-  const directories: FileSystemDirectoryHandle[] = []
-  const files = new Map<string, FileSystemFileHandle>()
+    handleRequests.map(async ({ file, handle }) => ({
+      file,
+      handle: await handle,
+    })),
+  );
+  const directories: FileSystemDirectoryHandle[] = [];
+  const files = new Map<string, FileSystemFileHandle>();
 
   for (const { file, handle } of entries) {
-    if (handle?.kind === 'directory') directories.push(handle)
-    else if (file && handle?.kind === 'file') {
-      files.set(getFileHandleLookupKey(file), handle)
+    if (handle?.kind === "directory") directories.push(handle);
+    else if (file && handle?.kind === "file") {
+      files.set(getFileHandleLookupKey(file), handle);
     }
   }
 
-  return { directories, files }
+  return { directories, files };
 }
 
 async function handleDrop(event: DragEvent): Promise<void> {
-  dragDepth = 0
-  dragActive.value = false
-  const dataTransfer = event.dataTransfer
-  if (!dataTransfer) return
-  const files = [...dataTransfer.files]
-  let droppedHandles!: DroppedFileSystemHandles
+  dragDepth = 0;
+  dragActive.value = false;
+  const dataTransfer = event.dataTransfer;
+  if (!dataTransfer) return;
+  const files = [...dataTransfer.files];
+  let droppedHandles!: DroppedFileSystemHandles;
 
   try {
-    droppedHandles = await getDroppedFileSystemHandles(dataTransfer)
+    droppedHandles = await getDroppedFileSystemHandles(dataTransfer);
     if (droppedHandles.directories.length > 1) {
-      showError('폴더는 한 번에 하나씩 놓아주세요.')
-      return
+      showError("폴더는 한 번에 하나씩 놓아주세요.");
+      return;
     }
     if (droppedHandles.directories[0]) {
-      const handle = droppedHandles.directories[0]
-      loadingMessage.value = `${handle.name} 폴더의 지원 파일을 찾는 중입니다...`
-      loading.value = true
-      const loadedDirectory = await loadDirectoryHandle(handle)
+      const handle = droppedHandles.directories[0];
+      loadingMessage.value = `${handle.name} 폴더의 지원 파일을 찾는 중입니다...`;
+      loading.value = true;
+      const loadedDirectory = await loadDirectoryHandle(handle);
       await useCollection(loadedDirectory.collection, {
         directoryHandle: handle,
         directoryHandles: loadedDirectory.handles,
-      })
-      return
+      });
+      return;
     }
   } catch (error) {
-    const message = describeError(error, '놓은 폴더를 읽지 못했습니다. 접근 권한을 확인해주세요.')
-    if (message) showError(message)
-    return
+    const message = describeError(
+      error,
+      "놓은 폴더를 읽지 못했습니다. 접근 권한을 확인해주세요.",
+    );
+    if (message) showError(message);
+    return;
   } finally {
-    loading.value = false
+    loading.value = false;
   }
 
-  if (!files.length) return
+  if (!files.length) return;
 
   if (files.length === 1 && isArchiveFileName(files[0].name)) {
-    await openArchiveFile(files[0])
-    return
+    await openArchiveFile(files[0]);
+    return;
   }
 
-  const nextCollection = loadSelectedFiles(files, droppedHandles.files)
+  const nextCollection = loadSelectedFiles(files, droppedHandles.files);
   if (!nextCollection.items.length) {
-    showError('이미지, 텍스트, 음악, 동영상 또는 압축파일을 놓아주세요.')
-    return
+    showError("이미지, 텍스트, 음악, 동영상 또는 압축파일을 놓아주세요.");
+    return;
   }
-  await useCollection(nextCollection)
+  await useCollection(nextCollection);
 
-  const droppedItem = nextCollection.items[0]
-  if (files.length === 1) openViewer(droppedItem.id)
+  const droppedItem = nextCollection.items[0];
+  if (files.length === 1) openViewer(droppedItem.id);
 }
 
 function handleDragEnter(event: DragEvent): void {
-  if (!event.dataTransfer?.types.includes('Files')) return
-  dragDepth += 1
-  dragActive.value = true
+  if (!event.dataTransfer?.types.includes("Files")) return;
+  dragDepth += 1;
+  dragActive.value = true;
 }
 
 function handleDragLeave(): void {
-  dragDepth = Math.max(0, dragDepth - 1)
-  if (dragDepth === 0) dragActive.value = false
+  dragDepth = Math.max(0, dragDepth - 1);
+  if (dragDepth === 0) dragActive.value = false;
 }
 
-async function selectDirectory(path: string, preferredItemId?: string): Promise<void> {
-  const requestId = ++directoryNavigationRequest
-  if (archiveBrowsing.value) leaveArchiveBrowser()
-  browserTreeNodeId.value = undefined
-  cancelArchivePreview()
-  selectedDirectory.value = path
-  selectedItemId.value = undefined
-  await ensureDirectoryPathLoaded(path)
-  if (requestId !== directoryNavigationRequest || selectedDirectory.value !== path) return
+async function selectDirectory(
+  path: string,
+  preferredItemId?: string,
+): Promise<void> {
+  const requestId = ++directoryNavigationRequest;
+  cancelArchiveOpen();
+  if (archiveBrowsing.value) leaveArchiveBrowser();
+  browserTreeNodeId.value = undefined;
+  cancelArchivePreview();
+  selectedDirectory.value = path;
+  selectedItemId.value = undefined;
+  await ensureDirectoryPathLoaded(path);
+  if (
+    requestId !== directoryNavigationRequest ||
+    selectedDirectory.value !== path
+  )
+    return;
 
-  const hasPreferredItem = folderBrowserItems.value.some((item) => item.id === preferredItemId)
+  const hasPreferredItem = folderBrowserItems.value.some(
+    (item) => item.id === preferredItemId,
+  );
   selectedItemId.value = hasPreferredItem
     ? preferredItemId
-    : folderBrowserItems.value[0]?.id
-  if (hasPreferredItem) browserTreeNodeId.value = preferredItemId
-  if (selectedItem.value) void ensureDimensions(selectedItem.value)
+    : folderBrowserItems.value[0]?.id;
+  if (hasPreferredItem) browserTreeNodeId.value = preferredItemId;
+  if (selectedItem.value) void ensureDimensions(selectedItem.value);
 }
 
 function selectArchiveDirectory(path: string, preferredItemId?: string): void {
-  const index = archiveIndex.value
-  if (!index || !findDirectoryNode(index.tree, path)) return
+  const index = archiveIndex.value;
+  if (!index || !findDirectoryNode(index.tree, path)) return;
 
-  browserTreeNodeId.value = undefined
-  cancelArchivePreview()
-  selectedArchiveDirectory.value = path
-  const hasPreferredItem = archiveBrowserItems.value.some((item) => item.id === preferredItemId)
+  browserTreeNodeId.value = undefined;
+  cancelArchivePreview();
+  selectedArchiveDirectory.value = path;
+  const hasPreferredItem = archiveBrowserItems.value.some(
+    (item) => item.id === preferredItemId,
+  );
   archiveSelectedItemId.value = hasPreferredItem
     ? preferredItemId
-    : archiveBrowserItems.value[0]?.id
-  if (hasPreferredItem && preferredItemId?.startsWith('archive-folder:')) {
-    const outerItemId = archiveOuterItemId.value
-    const treePath = preferredItemId.slice(`archive-folder:${outerItemId}:`.length)
-    browserTreeNodeId.value = `archive-directory:${outerItemId}:${treePath}`
+    : archiveBrowserItems.value[0]?.id;
+  if (hasPreferredItem && preferredItemId?.startsWith("archive-folder:")) {
+    const outerItemId = archiveOuterItemId.value;
+    const treePath = preferredItemId.slice(
+      `archive-folder:${outerItemId}:`.length,
+    );
+    browserTreeNodeId.value = `archive-directory:${outerItemId}:${treePath}`;
   }
 }
 
 async function selectTreeNode(node: MediaDirectoryNode): Promise<void> {
-  if (node.kind === 'folder') {
-    await selectDirectory(node.path)
-    return
+  if (node.kind === "folder") {
+    await selectDirectory(node.path);
+    return;
   }
 
-  pendingTreeNodeId.value = node.id
+  pendingTreeNodeId.value = node.id;
 
   try {
-    const archiveItemId = node.archiveItemId
-    const archiveItem = collection.value?.items.find((item) => item.id === archiveItemId)
-    if (!archiveItem || archiveItem.kind !== 'archive') return
+    const archiveItemId = node.archiveItemId;
+    const archiveItem = collection.value?.items.find(
+      (item) => item.id === archiveItemId,
+    );
+    if (!archiveItem || archiveItem.kind !== "archive") return;
 
     if (!archiveBrowsing.value || archiveOuterItemId.value !== archiveItem.id) {
-      await enterArchiveBrowser(archiveItem)
+      await enterArchiveBrowser(archiveItem);
     }
-    if (!archiveBrowsing.value || archiveOuterItemId.value !== archiveItem.id) return
+    if (!archiveBrowsing.value || archiveOuterItemId.value !== archiveItem.id)
+      return;
 
-    selectArchiveDirectory(node.kind === 'archive-directory' ? node.path : '')
+    selectArchiveDirectory(node.kind === "archive-directory" ? node.path : "");
   } finally {
-    if (pendingTreeNodeId.value === node.id) pendingTreeNodeId.value = undefined
+    if (pendingTreeNodeId.value === node.id)
+      pendingTreeNodeId.value = undefined;
   }
 }
 
 function expandTreeNode(node: MediaDirectoryNode): void {
-  if (node.kind === 'folder') void ensureFolderLoaded(node)
+  if (node.kind === "folder") void ensureFolderLoaded(node);
 }
 
 function selectItem(id: string): void {
-  selectedItemId.value = id
-  if (selectedItem.value) void ensureDimensions(selectedItem.value)
+  selectedItemId.value = id;
+  if (selectedItem.value) void ensureDimensions(selectedItem.value);
 }
 
 function selectBrowserItem(id: string): void {
   if (archiveBrowsing.value) {
-    archiveSelectedItemId.value = id
-    const item = browserItems.value.find((candidate) => candidate.id === id)
-    const outerItemId = archiveOuterItemId.value
+    archiveSelectedItemId.value = id;
+    const item = browserItems.value.find((candidate) => candidate.id === id);
+    const outerItemId = archiveOuterItemId.value;
     if (outerItemId && item) {
-      const treePath = item.kind === 'folder'
-        ? item.navigationPath ?? ''
-        : selectedArchiveDirectory.value
+      const treePath =
+        item.kind === "folder"
+          ? (item.navigationPath ?? "")
+          : selectedArchiveDirectory.value;
       browserTreeNodeId.value = treePath
         ? `archive-directory:${outerItemId}:${treePath}`
-        : `archive:${outerItemId}`
+        : `archive:${outerItemId}`;
     }
-    if (item?.kind === 'archive-entry' || item?.kind === 'archive-text-entry') {
-      scheduleArchivePreview(item)
-    }
-    else cancelArchivePreview()
-    return
+    if (item?.kind === "archive-entry" || item?.kind === "archive-text-entry") {
+      scheduleArchivePreview(item);
+    } else cancelArchivePreview();
+    return;
   }
 
-  cancelArchivePreview()
-  selectItem(id)
-  const item = browserItems.value.find((candidate) => candidate.id === id)
-  if (!item) return
-  if (item.kind === 'archive') {
-    browserTreeNodeId.value = `archive:${item.id}`
-  } else if (item.kind === 'folder') {
-    browserTreeNodeId.value = `folder:${item.navigationPath ?? ''}`
-  } else if (item.kind === 'folder-parent') {
-    browserTreeNodeId.value = `folder:${selectedDirectory.value}`
+  cancelArchivePreview();
+  selectItem(id);
+  const item = browserItems.value.find((candidate) => candidate.id === id);
+  if (!item) return;
+  if (item.kind === "archive") {
+    browserTreeNodeId.value = `archive:${item.id}`;
+  } else if (item.kind === "folder") {
+    browserTreeNodeId.value = `folder:${item.navigationPath ?? ""}`;
+  } else if (item.kind === "folder-parent") {
+    browserTreeNodeId.value = `folder:${selectedDirectory.value}`;
   } else {
-    browserTreeNodeId.value = `folder:${selectedDirectory.value}`
+    browserTreeNodeId.value = `folder:${selectedDirectory.value}`;
   }
 }
 
 function openFolderImage(item: MediaItem, slideshow: boolean): void {
-  const images = visibleItems.value.filter(isImageMediaItem)
-  if (!images.some((image) => image.id === item.id)) return
+  const images = visibleItems.value.filter(isImageMediaItem);
+  if (!images.some((image) => image.id === item.id)) return;
 
-  viewerSource.value = 'folder'
-  viewerItems.value = images
-  viewerCurrentId.value = item.id
-  selectedItemId.value = item.id
-  initialSlideshow.value = slideshow
-  viewerOpen.value = true
+  viewerSource.value = "folder";
+  viewerItems.value = images;
+  viewerCurrentId.value = item.id;
+  selectedItemId.value = item.id;
+  initialSlideshow.value = slideshow;
+  viewerOpen.value = true;
 }
 
 async function refreshViewerImage(item: MediaItem): Promise<boolean> {
-  const activeCollection = collection.value
-  const index = archiveIndex.value
-  const navigationRequest = archiveExtractionRequest
+  const activeCollection = collection.value;
+  const index = archiveIndex.value;
+  const navigationRequest = archiveExtractionRequest;
   try {
-    const directoryHandle = item.kind === 'image'
-      ? directoryHandleCache.get(item.directoryPath)
-      : undefined
+    const directoryHandle =
+      item.kind === "image"
+        ? directoryHandleCache.get(item.directoryPath)
+        : undefined;
     const fileHandle = directoryHandle
       ? await directoryHandle.getFileHandle(item.name)
-      : item.fileHandle
-    const sourceFile = item.kind === 'archive-entry' && index
-      ? await extractArchiveEntry(index, item)
-      : fileHandle ? await fileHandle.getFile() : item.file
+      : item.fileHandle;
+    const sourceFile =
+      item.kind === "archive-entry" && index
+        ? await extractArchiveEntry(index, item)
+        : fileHandle
+          ? await fileHandle.getFile()
+          : item.file;
     // Read fresh bytes before displaying them; do not keep a file-backed snapshot
     // that can become invalid when an external editor replaces the source file.
     const file = new File([await sourceFile.arrayBuffer()], sourceFile.name, {
       type: sourceFile.type,
       lastModified: sourceFile.lastModified,
-    })
+    });
     if (
-      !viewerOpen.value
-      || viewerCurrentId.value !== item.id
-      || collection.value !== activeCollection
-      || archiveIndex.value !== index
-      || archiveExtractionRequest !== navigationRequest
-    ) return false
+      !viewerOpen.value ||
+      viewerCurrentId.value !== item.id ||
+      collection.value !== activeCollection ||
+      archiveIndex.value !== index ||
+      archiveExtractionRequest !== navigationRequest
+    )
+      return false;
 
-    item.fileHandle = fileHandle
-    item.file = file
-    item.size = file.size
-    item.lastModified = file.lastModified
-    item.width = undefined
-    item.height = undefined
-    if (item.kind === 'archive-entry') {
-      archiveEntryFiles.set(item.id, file)
-      touchArchiveCache(item.id)
+    item.fileHandle = fileHandle;
+    item.file = file;
+    item.size = file.size;
+    item.lastModified = file.lastModified;
+    item.width = undefined;
+    item.height = undefined;
+    if (item.kind === "archive-entry") {
+      archiveEntryFiles.set(item.id, file);
+      touchArchiveCache(item.id);
     }
-    return true
+    return true;
   } catch (error) {
     if (viewerOpen.value && viewerCurrentId.value === item.id) {
-      showError(describeError(error, '이미지를 다시 읽지 못했습니다. 파일과 접근 권한을 확인해주세요.'))
+      showError(
+        describeError(
+          error,
+          "이미지를 다시 읽지 못했습니다. 파일과 접근 권한을 확인해주세요.",
+        ),
+      );
     }
-    return false
+    return false;
   }
 }
 
 function openTextViewer(item: MediaItem): void {
-  if (item.kind !== 'text') return
-  closeViewer()
-  textViewerItem.value = item
-  selectedItemId.value = item.id
+  if (item.kind !== "text") return;
+  closeViewer();
+  textViewerItem.value = item;
+  selectedItemId.value = item.id;
 }
 
 function closeTextViewer(): void {
-  textViewerItem.value = undefined
+  textViewerItem.value = undefined;
 }
 
 function handleTextFileSaved(itemId: string, file: File): void {
-  const items = collection.value?.items
-  const itemIndex = items?.findIndex((item) => item.id === itemId) ?? -1
-  if (!items || itemIndex < 0) return
+  const items = collection.value?.items;
+  const itemIndex = items?.findIndex((item) => item.id === itemId) ?? -1;
+  if (!items || itemIndex < 0) return;
 
   const updatedItem: MediaItem = {
     ...items[itemIndex],
     file,
     size: file.size,
     lastModified: file.lastModified,
-  }
-  items[itemIndex] = updatedItem
-  if (textViewerItem.value?.id === itemId) textViewerItem.value = updatedItem
+  };
+  items[itemIndex] = updatedItem;
+  if (textViewerItem.value?.id === itemId) textViewerItem.value = updatedItem;
 }
 
 async function enterArchiveBrowser(item: MediaItem): Promise<void> {
-  closeViewer()
-  closeTextViewer()
-  if (archiveBrowsing.value) disposeArchiveBrowser()
+  closeViewer();
+  closeTextViewer();
+  if (archiveBrowsing.value) disposeArchiveBrowser();
 
-  loadingMessage.value = `${item.name} 파일 목록을 읽는 중입니다...`
-  loading.value = true
+  const request = Symbol();
+  pendingArchiveOpen = request;
+  loadingMessage.value = `${item.name} 파일 목록을 읽는 중입니다...`;
+  loading.value = true;
 
+  let index: ArchiveIndex | undefined;
+  let adopted = false;
   try {
-    const index = await loadArchiveIndex(item.file)
-    index.items.sort((left, right) => naturalCompare(left.path, right.path))
-    syncArchiveTree(item, index)
+    index = await loadArchiveIndex(item.file);
+    if (pendingArchiveOpen !== request) return;
+    index.items.sort((left, right) => naturalCompare(left.path, right.path));
+    syncArchiveTree(item, index);
 
-    const archiveTreeNodeId = `archive:${item.id}`
+    const archiveTreeNodeId = `archive:${item.id}`;
     if (requestedExpandedTreeNodeId.value === archiveTreeNodeId) {
-      requestedExpandedTreeNodeId.value = undefined
-      await nextTick()
-      requestedExpandedTreeNodeId.value = archiveTreeNodeId
+      requestedExpandedTreeNodeId.value = undefined;
+      await nextTick();
+      if (pendingArchiveOpen !== request) return;
+      requestedExpandedTreeNodeId.value = archiveTreeNodeId;
     }
 
     if (!index.items.length) {
-      const nestedArchiveCount = index.nestedArchivePaths.length
+      const nestedArchiveCount = index.nestedArchivePaths.length;
       if (nestedArchiveCount === 1) {
-        const nestedArchivePath = index.nestedArchivePaths[0]
+        const nestedArchivePath = index.nestedArchivePaths[0];
         showError(
-          `압축파일 안에 "${nestedArchivePath}"이 들어 있습니다. `
-          + '중첩 압축은 지원하지 않으므로 바깥 압축을 풀고 내부 압축파일을 직접 열어주세요.',
-        )
+          `압축파일 안에 "${nestedArchivePath}"이 들어 있습니다. ` +
+            "중첩 압축은 지원하지 않으므로 바깥 압축을 풀고 내부 압축파일을 직접 열어주세요.",
+        );
       } else if (nestedArchiveCount > 1) {
         showError(
-          `압축파일 안에 다른 압축파일 ${nestedArchiveCount}개가 들어 있습니다. `
-          + '중첩 압축은 지원하지 않으므로 바깥 압축을 풀고 내부 압축파일을 직접 열어주세요.',
-        )
+          `압축파일 안에 다른 압축파일 ${nestedArchiveCount}개가 들어 있습니다. ` +
+            "중첩 압축은 지원하지 않으므로 바깥 압축을 풀고 내부 압축파일을 직접 열어주세요.",
+        );
       } else {
-        showError('압축파일은 정상이지만 WebSee에서 지원하는 파일이 없습니다.')
+        showError("압축파일은 정상이지만 WebSee에서 지원하는 파일이 없습니다.");
       }
-      return
+      return;
     }
 
-    selectedItemId.value = item.id
-    archiveOuterItemId.value = item.id
-    selectedArchiveDirectory.value = ''
-    archiveIndex.value = index
-    archiveSelectedItemId.value = archiveParentItem.value?.id
-    startArchiveIndexing(archiveIndex.value)
+    selectedItemId.value = item.id;
+    archiveOuterItemId.value = item.id;
+    selectedArchiveDirectory.value = "";
+    archiveIndex.value = index;
+    adopted = true;
+    archiveSelectedItemId.value = archiveParentItem.value?.id;
+    startArchiveIndexing(archiveIndex.value);
   } catch (error) {
-    const message = describeError(error, '압축파일을 열지 못했습니다. 파일이 손상되지 않았는지 확인해주세요.')
-    if (message) showError(message)
+    if (pendingArchiveOpen !== request) return;
+    const message = describeError(
+      error,
+      "압축파일을 열지 못했습니다. 파일이 손상되지 않았는지 확인해주세요.",
+    );
+    if (message) showError(message);
   } finally {
-    loading.value = false
+    if (!adopted && index?.format === "7z") index.release();
+    if (pendingArchiveOpen === request) cancelArchiveOpen();
   }
 }
 
 function touchArchiveCache(id: string): void {
-  const existingIndex = archiveEntryCacheOrder.indexOf(id)
-  if (existingIndex >= 0) archiveEntryCacheOrder.splice(existingIndex, 1)
-  archiveEntryCacheOrder.push(id)
+  const existingIndex = archiveEntryCacheOrder.indexOf(id);
+  if (existingIndex >= 0) archiveEntryCacheOrder.splice(existingIndex, 1);
+  archiveEntryCacheOrder.push(id);
 }
 
 function cancelArchivePreview(clearReadyItem = true): void {
-  archivePreviewRequest += 1
-  if (archivePreviewTimer !== undefined) window.clearTimeout(archivePreviewTimer)
-  archivePreviewTimer = undefined
-  archivePreviewLoading.value = false
-  if (clearReadyItem) archivePreviewItemId.value = undefined
+  archivePreviewRequest += 1;
+  if (archivePreviewTimer !== undefined)
+    window.clearTimeout(archivePreviewTimer);
+  archivePreviewTimer = undefined;
+  archivePreviewLoading.value = false;
+  if (clearReadyItem) archivePreviewItemId.value = undefined;
 }
 
 function scheduleArchivePreview(item: MediaItem): void {
-  cancelArchivePreview()
+  cancelArchivePreview();
 
-  const cachedFile = archiveEntryFiles.get(item.id)
+  const cachedFile = archiveEntryFiles.get(item.id);
   if (cachedFile) {
-    item.file = cachedFile
-    touchArchiveCache(item.id)
-    archivePreviewItemId.value = item.id
-    return
+    item.file = cachedFile;
+    touchArchiveCache(item.id);
+    archivePreviewItemId.value = item.id;
+    return;
   }
 
-  const requestId = archivePreviewRequest
-  archivePreviewLoading.value = true
+  const requestId = archivePreviewRequest;
+  archivePreviewLoading.value = true;
   archivePreviewTimer = window.setTimeout(() => {
-    archivePreviewTimer = undefined
-    void prepareArchivePreview(item, requestId)
-  }, 160)
+    archivePreviewTimer = undefined;
+    void prepareArchivePreview(item, requestId);
+  }, 160);
 }
 
-async function prepareArchivePreview(item: MediaItem, requestId: number): Promise<void> {
-  const index = archiveIndex.value
+async function prepareArchivePreview(
+  item: MediaItem,
+  requestId: number,
+): Promise<void> {
+  const index = archiveIndex.value;
   if (
-    !index
-    || (item.kind !== 'archive-entry' && item.kind !== 'archive-text-entry')
-  ) return
+    !index ||
+    (item.kind !== "archive-entry" && item.kind !== "archive-text-entry")
+  )
+    return;
 
   try {
-    const file = await getArchiveEntryFile(index, item)
+    const file = await getArchiveEntryFile(index, item);
     if (
-      requestId !== archivePreviewRequest
-      || archiveIndex.value !== index
-      || archiveSelectedItemId.value !== item.id
-    ) return
+      requestId !== archivePreviewRequest ||
+      archiveIndex.value !== index ||
+      archiveSelectedItemId.value !== item.id
+    )
+      return;
 
-    cacheArchiveEntry(index, item, file)
-    archivePreviewItemId.value = item.id
+    cacheArchiveEntry(index, item, file);
+    archivePreviewItemId.value = item.id;
   } catch (error) {
-    if (requestId !== archivePreviewRequest) return
-    const message = describeError(error, '압축파일 안의 미리보기를 만들지 못했습니다.')
-    if (message) showError(message)
+    if (requestId !== archivePreviewRequest) return;
+    const message = describeError(
+      error,
+      "압축파일 안의 미리보기를 만들지 못했습니다.",
+    );
+    if (message) showError(message);
   } finally {
-    if (requestId === archivePreviewRequest) archivePreviewLoading.value = false
+    if (requestId === archivePreviewRequest)
+      archivePreviewLoading.value = false;
   }
 }
 
-async function getArchiveEntryFile(index: ArchiveIndex, item: MediaItem): Promise<File> {
-  const cached = archiveEntryFiles.get(item.id)
+async function getArchiveEntryFile(
+  index: ArchiveIndex,
+  item: MediaItem,
+): Promise<File> {
+  const cached = archiveEntryFiles.get(item.id);
   if (cached) {
-    touchArchiveCache(item.id)
-    return cached
+    touchArchiveCache(item.id);
+    return cached;
   }
 
-  const existingRequest = archiveEntryRequests.get(item.id)
-  if (existingRequest) return existingRequest
+  const existingRequest = archiveEntryRequests.get(item.id);
+  if (existingRequest) return existingRequest;
 
-  const request = extractArchiveEntry(index, item)
-  archiveEntryRequests.set(item.id, request)
+  const request = extractArchiveEntry(index, item);
+  archiveEntryRequests.set(item.id, request);
 
   try {
-    return await request
+    return await request;
   } finally {
-    if (archiveEntryRequests.get(item.id) === request) archiveEntryRequests.delete(item.id)
+    if (archiveEntryRequests.get(item.id) === request)
+      archiveEntryRequests.delete(item.id);
   }
 }
 
@@ -1232,555 +1393,681 @@ function getNextArchiveIndexingItem(
   index: ArchiveIndex,
   pendingIds: ReadonlySet<string>,
 ): MediaItem | undefined {
-  const currentDirectoryItem = archiveDirectoryItems.value.find((item) => pendingIds.has(item.id))
-  return currentDirectoryItem ?? index.items.find((item) => pendingIds.has(item.id))
+  if (index.format === "7z") {
+    // Follow archive order within the viewport to avoid rewinding a solid block.
+    let first: MediaItem | undefined;
+    for (const item of sevenZipViewport.value) {
+      if (!pendingIds.has(item.id) || item.archiveEntryIndex === undefined) continue;
+      if (item.archiveEntryIndex < (first?.archiveEntryIndex ?? Infinity)) first = item;
+    }
+    return first;
+  }
+  const currentDirectoryItem = archiveDirectoryItems.value.find((item) =>
+    pendingIds.has(item.id),
+  );
+  return (
+    currentDirectoryItem ?? index.items.find((item) => pendingIds.has(item.id))
+  );
 }
 
-async function processArchiveIndexing(index: ArchiveIndex, runId: number): Promise<void> {
-  const imageItems = index.items.filter((item) => item.kind === 'archive-entry')
-  const pendingIds = new Set(imageItems.map((item) => item.id))
-
-  while (pendingIds.size && archiveIndexingRun === runId && archiveIndex.value === index) {
-    const item = getNextArchiveIndexingItem(index, pendingIds)
-    if (!item) break
+async function processArchiveIndexing(
+  index: ArchiveIndex,
+  runId: number,
+  pendingIds: Set<string>,
+): Promise<void> {
+  while (
+    pendingIds.size &&
+    archiveIndexingRun === runId &&
+    archiveIndex.value === index
+  ) {
+    const item = getNextArchiveIndexingItem(index, pendingIds);
+    if (!item) break;
 
     try {
       if (item.size > ARCHIVE_AUTO_PREVIEW_MAX_ENTRY_SIZE) {
-        throw new Error('Archive entry is too large for background thumbnailing.')
+        throw new Error(
+          "Archive entry is too large for background thumbnailing.",
+        );
       }
-      const file = await getArchiveEntryFile(index, item)
-      const thumbnail = await createImageThumbnail(file)
-      if (archiveIndexingRun !== runId || archiveIndex.value !== index) return
+      const file = await getArchiveEntryFile(index, item);
+      const thumbnail = await createImageThumbnail(file);
+      if (archiveIndexingRun !== runId || archiveIndex.value !== index) return;
 
-      item.width = thumbnail.width
-      item.height = thumbnail.height
-      const previousUrl = archiveThumbnailUrls.get(item.id)
-      if (previousUrl) URL.revokeObjectURL(previousUrl)
-      archiveThumbnailUrls.set(item.id, URL.createObjectURL(thumbnail.blob))
+      item.width = thumbnail.width;
+      item.height = thumbnail.height;
+      const previousUrl = archiveThumbnailUrls.get(item.id);
+      if (previousUrl) URL.revokeObjectURL(previousUrl);
+      archiveThumbnailUrls.set(item.id, URL.createObjectURL(thumbnail.blob));
     } catch {
       // An unreadable image should not stop metadata indexing for the remaining archive entries.
     } finally {
-      pendingIds.delete(item.id)
+      pendingIds.delete(item.id);
       if (archiveIndexingRun === runId && archiveIndex.value === index) {
-        archiveIndexingCompleted.value = archiveIndexingTotal.value - pendingIds.size
+        archiveIndexingCompleted.value =
+          archiveIndexingTotal.value - pendingIds.size;
       }
     }
 
-    await new Promise<void>((resolve) => window.setTimeout(resolve, 0))
+    await new Promise<void>((resolve) => window.setTimeout(resolve, 0));
   }
 
   if (archiveIndexingRun === runId && archiveIndex.value === index) {
-    archiveIndexing.value = false
+    archiveIndexing.value = false;
   }
 }
 
 function startArchiveIndexing(index: ArchiveIndex): void {
-  const imageCount = index.items.filter((item) => item.kind === 'archive-entry').length
-  const runId = ++archiveIndexingRun
-  archiveIndexingCompleted.value = 0
-  archiveIndexingTotal.value = imageCount
-  archiveIndexing.value = imageCount > 0
-  if (archiveIndexing.value) void processArchiveIndexing(index, runId)
+  pendingThumbnailIds = new Set(
+    index.items.filter((item) => item.kind === "archive-entry").map((item) => item.id),
+  );
+  const imageCount = pendingThumbnailIds.size;
+  const runId = ++archiveIndexingRun;
+  archiveIndexingCompleted.value = 0;
+  archiveIndexingTotal.value = imageCount;
+  archiveIndexing.value = imageCount > 0;
+  if (archiveIndexing.value) void processArchiveIndexing(index, runId, pendingThumbnailIds);
 }
 
-function cacheArchiveEntry(index: ArchiveIndex, item: MediaItem, file: File): void {
-  item.file = file
-  archiveEntryFiles.set(item.id, file)
-  touchArchiveCache(item.id)
-  void ensureDimensions(item)
+watch(
+  sevenZipViewport,
+  (items) => {
+    const index = archiveIndex.value;
+    if (index?.format !== "7z" || archiveIndexing.value) return;
+    if (!items.some((item) => pendingThumbnailIds.has(item.id))) return;
+    archiveIndexing.value = true;
+    void processArchiveIndexing(index, archiveIndexingRun, pendingThumbnailIds);
+  },
+  { flush: "post" },
+);
+
+function cacheArchiveEntry(
+  index: ArchiveIndex,
+  item: MediaItem,
+  file: File,
+): void {
+  item.file = file;
+  archiveEntryFiles.set(item.id, file);
+  touchArchiveCache(item.id);
+  void ensureDimensions(item);
 
   while (archiveEntryCacheOrder.length > ARCHIVE_ENTRY_CACHE_LIMIT) {
     const evictIndex = archiveEntryCacheOrder.findIndex(
-      (id) => id !== item.id
-        && id !== viewerCurrentId.value
-        && id !== textViewerItem.value?.id,
-    )
-    if (evictIndex < 0) break
+      (id) =>
+        id !== item.id &&
+        id !== viewerCurrentId.value &&
+        id !== textViewerItem.value?.id,
+    );
+    if (evictIndex < 0) break;
 
-    const [evictedId] = archiveEntryCacheOrder.splice(evictIndex, 1)
-    const evictedItem = index.items.find((candidate) => candidate.id === evictedId)
+    const [evictedId] = archiveEntryCacheOrder.splice(evictIndex, 1);
+    const evictedItem = index.items.find(
+      (candidate) => candidate.id === evictedId,
+    );
     if (evictedItem) {
-      revokeItems([evictedItem])
-      evictedItem.file = index.archiveFile
+      revokeItems([evictedItem]);
+      evictedItem.file = index.archiveFile;
     }
-    archiveEntryFiles.delete(evictedId)
+    archiveEntryFiles.delete(evictedId);
   }
 }
 
 async function openArchiveEntry(item: MediaItem): Promise<void> {
-  const index = archiveIndex.value
-  if (!index || item.kind !== 'archive-entry') return
+  const index = archiveIndex.value;
+  if (!index || item.kind !== "archive-entry") return;
 
-  cancelArchivePreview()
-  const requestId = ++archiveExtractionRequest
-  const previousSelectedId = archiveSelectedItemId.value
-  archiveSelectedItemId.value = item.id
-  loadingMessage.value = `${item.name} 이미지를 여는 중입니다...`
-  loading.value = true
+  cancelArchivePreview();
+  const requestId = ++archiveExtractionRequest;
+  const previousSelectedId = archiveSelectedItemId.value;
+  archiveSelectedItemId.value = item.id;
+  loadingMessage.value = `${item.name} 이미지를 여는 중입니다...`;
+  loading.value = true;
 
   try {
-    const file = await getArchiveEntryFile(index, item)
-    if (requestId !== archiveExtractionRequest || archiveIndex.value !== index) return
+    const file = await getArchiveEntryFile(index, item);
+    if (requestId !== archiveExtractionRequest || archiveIndex.value !== index)
+      return;
 
-    cacheArchiveEntry(index, item, file)
-    archivePreviewItemId.value = item.id
-    viewerSource.value = 'archive'
+    cacheArchiveEntry(index, item, file);
+    archivePreviewItemId.value = item.id;
+    viewerSource.value = "archive";
     viewerItems.value = archiveDirectoryItems.value.filter(
-      (candidate) => candidate.kind === 'archive-entry',
-    )
-    viewerCurrentId.value = item.id
-    initialSlideshow.value = false
-    viewerOpen.value = true
+      (candidate) => candidate.kind === "archive-entry",
+    );
+    viewerCurrentId.value = item.id;
+    initialSlideshow.value = false;
+    viewerOpen.value = true;
   } catch (error) {
-    if (requestId !== archiveExtractionRequest) return
-    archiveSelectedItemId.value = previousSelectedId
-    const message = describeError(error, '압축파일 안의 이미지를 열지 못했습니다.')
-    if (message) showError(message)
+    if (requestId !== archiveExtractionRequest) return;
+    archiveSelectedItemId.value = previousSelectedId;
+    const message = describeError(
+      error,
+      "압축파일 안의 이미지를 열지 못했습니다.",
+    );
+    if (message) showError(message);
   } finally {
-    if (requestId === archiveExtractionRequest) loading.value = false
+    if (requestId === archiveExtractionRequest) loading.value = false;
   }
 }
 
 async function openArchiveTextEntry(item: MediaItem): Promise<void> {
-  const index = archiveIndex.value
-  if (!index || item.kind !== 'archive-text-entry') return
+  const index = archiveIndex.value;
+  if (!index || item.kind !== "archive-text-entry") return;
 
-  closeViewer()
-  closeTextViewer()
-  cancelArchivePreview()
-  const requestId = ++archiveExtractionRequest
-  const previousSelectedId = archiveSelectedItemId.value
-  archiveSelectedItemId.value = item.id
-  loadingMessage.value = `${item.name} 텍스트를 여는 중입니다...`
-  loading.value = true
+  closeViewer();
+  closeTextViewer();
+  cancelArchivePreview();
+  const requestId = ++archiveExtractionRequest;
+  const previousSelectedId = archiveSelectedItemId.value;
+  archiveSelectedItemId.value = item.id;
+  loadingMessage.value = `${item.name} 텍스트를 여는 중입니다...`;
+  loading.value = true;
 
   try {
-    const file = await getArchiveEntryFile(index, item)
-    if (requestId !== archiveExtractionRequest || archiveIndex.value !== index) return
+    const file = await getArchiveEntryFile(index, item);
+    if (requestId !== archiveExtractionRequest || archiveIndex.value !== index)
+      return;
 
-    cacheArchiveEntry(index, item, file)
-    archivePreviewItemId.value = item.id
-    textViewerItem.value = item
+    cacheArchiveEntry(index, item, file);
+    archivePreviewItemId.value = item.id;
+    textViewerItem.value = item;
   } catch (error) {
-    if (requestId !== archiveExtractionRequest) return
-    archiveSelectedItemId.value = previousSelectedId
-    const message = describeError(error, '압축파일 안의 텍스트를 열지 못했습니다.')
-    if (message) showError(message)
+    if (requestId !== archiveExtractionRequest) return;
+    archiveSelectedItemId.value = previousSelectedId;
+    const message = describeError(
+      error,
+      "압축파일 안의 텍스트를 열지 못했습니다.",
+    );
+    if (message) showError(message);
   } finally {
-    if (requestId === archiveExtractionRequest) loading.value = false
+    if (requestId === archiveExtractionRequest) loading.value = false;
   }
 }
 
-async function loadPlaybackFile(item: PlayableItem): Promise<File> {
-  const index = archiveIndex.value
-  return index && item.archiveEntryPath ? getArchiveEntryFile(index, item) : item.file
+async function loadItemFile(item: MediaItem): Promise<File> {
+  const index = archiveIndex.value;
+  return index && item.archiveEntryPath
+    ? getArchiveEntryFile(index, item)
+    : item.file;
 }
 
 function openViewer(id?: string, slideshow = false): void {
-  const targetId = id ?? browserSelectedId.value ?? browserItems.value[0]?.id
-  if (!targetId) return
+  const targetId = id ?? browserSelectedId.value ?? browserItems.value[0]?.id;
+  if (!targetId) return;
 
-  const item = browserItems.value.find((candidate) => candidate.id === targetId)
-  if (!item) return
+  const item = browserItems.value.find(
+    (candidate) => candidate.id === targetId,
+  );
+  if (!item) return;
 
-  if (item.kind === 'folder') {
+  if (item.kind === "folder") {
     if (archiveBrowsing.value) {
-      const outerItemId = archiveOuterItemId.value
+      const outerItemId = archiveOuterItemId.value;
       requestedExpandedTreeNodeId.value = outerItemId
-        ? `archive-directory:${outerItemId}:${item.navigationPath ?? ''}`
-        : undefined
-      selectArchiveDirectory(item.navigationPath ?? '')
+        ? `archive-directory:${outerItemId}:${item.navigationPath ?? ""}`
+        : undefined;
+      selectArchiveDirectory(item.navigationPath ?? "");
     } else {
-      requestedExpandedTreeNodeId.value = `folder:${item.navigationPath ?? ''}`
-      selectDirectory(item.navigationPath ?? '')
+      requestedExpandedTreeNodeId.value = `folder:${item.navigationPath ?? ""}`;
+      selectDirectory(item.navigationPath ?? "");
     }
-    return
+    return;
   }
 
-  if (item.kind === 'folder-parent') {
-    const previousPath = selectedDirectory.value
-    selectDirectory(item.navigationPath ?? '', `folder:${previousPath}`)
-    return
+  if (item.kind === "folder-parent") {
+    const previousPath = selectedDirectory.value;
+    selectDirectory(item.navigationPath ?? "", `folder:${previousPath}`);
+    return;
   }
 
-  if (item.kind === 'archive-parent') {
+  if (item.kind === "archive-parent") {
     if (selectedArchiveDirectory.value) {
-      const previousPath = selectedArchiveDirectory.value
-      const outerItemId = archiveOuterItemId.value
+      const previousPath = selectedArchiveDirectory.value;
+      const outerItemId = archiveOuterItemId.value;
       selectArchiveDirectory(
-        item.navigationPath ?? '',
-        outerItemId ? `archive-folder:${outerItemId}:${previousPath}` : undefined,
-      )
+        item.navigationPath ?? "",
+        outerItemId
+          ? `archive-folder:${outerItemId}:${previousPath}`
+          : undefined,
+      );
     } else {
-      leaveArchiveBrowser()
+      leaveArchiveBrowser();
     }
-    return
+    return;
   }
 
-  if (item.kind === 'archive-entry') {
-    void openArchiveEntry(item)
-    return
+  if (item.kind === "archive-entry") {
+    void openArchiveEntry(item);
+    return;
   }
 
-  if (item.kind === 'archive-text-entry') {
-    void openArchiveTextEntry(item)
-    return
+  if (item.kind === "archive-text-entry") {
+    void openArchiveTextEntry(item);
+    return;
   }
 
   if (isPlayableItem(item)) {
-    selectBrowserItem(item.id)
-    playbackItem.value = item
-    return
+    selectBrowserItem(item.id);
+    playbackItem.value = item;
+    return;
   }
 
-  if (item.kind === 'text') {
-    openTextViewer(item)
-    return
+  if (item.kind === "text") {
+    openTextViewer(item);
+    return;
   }
 
   if (isArchiveMediaItem(item)) {
-    requestedExpandedTreeNodeId.value = `archive:${item.id}`
-    void enterArchiveBrowser(item)
-    return
+    requestedExpandedTreeNodeId.value = `archive:${item.id}`;
+    void enterArchiveBrowser(item);
+    return;
   }
 
-  openFolderImage(item, slideshow)
+  openFolderImage(item, slideshow);
 }
 
 function selectViewerItem(id: string): void {
-  if (viewerSource.value === 'archive') {
-    const item = archiveItems.value.find((candidate) => candidate.id === id)
-    if (item) void openArchiveEntry(item)
-    return
+  if (viewerSource.value === "archive") {
+    const item = archiveItems.value.find((candidate) => candidate.id === id);
+    if (item) void openArchiveEntry(item);
+    return;
   }
 
-  viewerCurrentId.value = id
-  selectItem(id)
+  viewerCurrentId.value = id;
+  selectItem(id);
 }
 
 function closeViewer(): void {
-  if (viewerSource.value === 'archive') {
-    archiveExtractionRequest += 1
-    loading.value = false
+  if (viewerSource.value === "archive") {
+    archiveExtractionRequest += 1;
+    loading.value = false;
   }
 
-  if (viewerSource.value === 'archive' && viewerCurrentId.value) {
-    archiveSelectedItemId.value = viewerCurrentId.value
+  if (viewerSource.value === "archive" && viewerCurrentId.value) {
+    archiveSelectedItemId.value = viewerCurrentId.value;
   }
 
-  viewerOpen.value = false
-  initialSlideshow.value = false
-  viewerItems.value = []
-  viewerCurrentId.value = undefined
-  viewerSource.value = 'folder'
+  viewerOpen.value = false;
+  initialSlideshow.value = false;
+  viewerItems.value = [];
+  viewerCurrentId.value = undefined;
+  viewerSource.value = "folder";
 }
 
-function updateDimensions(item: MediaItem, width: number, height: number): void {
-  if (item.kind !== 'image' && item.kind !== 'archive-entry') return
-  item.width = width
-  item.height = height
+function updateDimensions(
+  item: MediaItem,
+  width: number,
+  height: number,
+): void {
+  if (item.kind !== "image" && item.kind !== "archive-entry") return;
+  item.width = width;
+  item.height = height;
 }
 
 function requestDimensions(item: MediaItem): void {
-  if (item.kind === 'image') void ensureDimensions(item)
+  if (item.kind === "image") void ensureDimensions(item);
 }
 
 function showFileInfo(): void {
-  const item = selectedFile.value
-  if (item) fileInfo.value = { item, path: selectedStatusPath.value ?? item.path }
+  const item = selectedFile.value;
+  if (item)
+    fileInfo.value = { item, path: selectedStatusPath.value ?? item.path };
 }
 
-function recordPlaybackMetadata(item: PlayableItem, media: HTMLMediaElement): void {
-  if (Number.isFinite(media.duration)) item.duration = media.duration
-  if (media instanceof HTMLVideoElement && media.videoWidth && media.videoHeight) {
-    item.width = media.videoWidth
-    item.height = media.videoHeight
+function recordPlaybackMetadata(
+  item: PlayableItem,
+  media: HTMLMediaElement,
+): void {
+  setMediaDuration(item, media.duration);
+  if (
+    media instanceof HTMLVideoElement &&
+    media.videoWidth &&
+    media.videoHeight
+  ) {
+    item.width = media.videoWidth;
+    item.height = media.videoHeight;
   }
 }
 
-function getTranslationSidecarTarget(item: MediaItem): TranslationSidecarTarget | undefined {
-  if (item.kind === 'image') {
-    const directoryHandle = directoryHandleCache.get(item.directoryPath)
-    return directoryHandle
-      ? { directoryHandle, sourceItem: item }
-      : undefined
+function getTranslationSidecarTarget(
+  item: MediaItem,
+): TranslationSidecarTarget | undefined {
+  if (item.kind === "image") {
+    const directoryHandle = directoryHandleCache.get(item.directoryPath);
+    return directoryHandle ? { directoryHandle, sourceItem: item } : undefined;
   }
 
-  if (item.kind !== 'archive-entry') return undefined
+  if (item.kind !== "archive-entry") return undefined;
   const sourceItem = archiveOuterItemId.value
-    ? collection.value?.items.find((candidate) => candidate.id === archiveOuterItemId.value)
-    : undefined
-  if (!sourceItem) return undefined
-  const directoryHandle = directoryHandleCache.get(sourceItem.directoryPath)
+    ? collection.value?.items.find(
+        (candidate) => candidate.id === archiveOuterItemId.value,
+      )
+    : undefined;
+  if (!sourceItem) return undefined;
+  const directoryHandle = directoryHandleCache.get(sourceItem.directoryPath);
   return directoryHandle
     ? { directoryHandle, sourceItem, archiveEntryPath: item.path }
-    : undefined
+    : undefined;
 }
 
 function getTranslationSourceItem(item: MediaItem): MediaItem | undefined {
-  if (item.kind === 'image') return item
-  if (item.kind !== 'archive-entry' || !archiveOuterItemId.value) return undefined
-  return collection.value?.items.find((candidate) => candidate.id === archiveOuterItemId.value)
+  if (item.kind === "image") return item;
+  if (item.kind !== "archive-entry" || !archiveOuterItemId.value)
+    return undefined;
+  return collection.value?.items.find(
+    (candidate) => candidate.id === archiveOuterItemId.value,
+  );
 }
 
-async function requestDraggedTranslationDirectory(item: MediaItem): Promise<void> {
-  const sourceItem = getTranslationSourceItem(item)
-  const picker = window.showDirectoryPicker?.bind(window) as TranslationDirectoryPicker | undefined
-  if (!sourceItem?.fileHandle || !picker) return
+async function requestDraggedTranslationDirectory(
+  item: MediaItem,
+): Promise<void> {
+  const sourceItem = getTranslationSourceItem(item);
+  const picker = window.showDirectoryPicker?.bind(window) as
+    | TranslationDirectoryPicker
+    | undefined;
+  if (!sourceItem?.fileHandle || !picker) return;
 
   try {
-    const directoryHandle = await pickTranslationSourceDirectory(sourceItem, picker)
-    if (directoryHandle) directoryHandleCache.set(sourceItem.directoryPath, directoryHandle)
+    const directoryHandle = await pickTranslationSourceDirectory(
+      sourceItem,
+      picker,
+    );
+    if (directoryHandle)
+      directoryHandleCache.set(sourceItem.directoryPath, directoryHandle);
   } catch (error) {
-    if (error instanceof DOMException && error.name === 'AbortError') return
+    if (error instanceof DOMException && error.name === "AbortError") return;
     if (error instanceof TranslationSourceDirectoryMismatchError) {
-      showError('드래그한 원본 파일이 들어 있는 폴더를 선택해주세요.')
-      return
+      showError("드래그한 원본 파일이 들어 있는 폴더를 선택해주세요.");
+      return;
     }
-    showError('원본 폴더를 열지 못했습니다. 폴더 접근 권한을 확인해주세요.')
+    showError("원본 폴더를 열지 못했습니다. 폴더 접근 권한을 확인해주세요.");
   }
 }
 
 async function loadSavedTranslation(
   item: MediaItem,
 ): Promise<ImageTranslationResult | undefined> {
-  const target = getTranslationSidecarTarget(item)
-  return target ? await loadTranslationSidecar(target, item) : undefined
+  const target = getTranslationSidecarTarget(item);
+  return target ? await loadTranslationSidecar(target, item) : undefined;
 }
 
-async function prepareTranslationPersistence(item: MediaItem): Promise<boolean> {
-  let target = getTranslationSidecarTarget(item)
+async function prepareTranslationPersistence(
+  item: MediaItem,
+): Promise<boolean> {
+  let target = getTranslationSidecarTarget(item);
   if (!target) {
-    await requestDraggedTranslationDirectory(item)
-    target = getTranslationSidecarTarget(item)
+    await requestDraggedTranslationDirectory(item);
+    target = getTranslationSidecarTarget(item);
   }
-  return target ? await requestTranslationSidecarPermission(target) : false
+  return target ? await requestTranslationSidecarPermission(target) : false;
 }
 
 async function saveTranslation(
   item: MediaItem,
   result: ImageTranslationResult,
 ): Promise<void> {
-  const target = getTranslationSidecarTarget(item)
-  if (!target) throw new Error('번역 결과를 저장할 원본 폴더 핸들이 없습니다.')
-  await saveTranslationSidecar(target, item, result)
+  const target = getTranslationSidecarTarget(item);
+  if (!target) throw new Error("번역 결과를 저장할 원본 폴더 핸들이 없습니다.");
+  await saveTranslationSidecar(target, item, result);
 }
 
 async function deleteSavedTranslation(item: MediaItem): Promise<boolean> {
-  const target = getTranslationSidecarTarget(item)
-  if (!target) return false
-  if (!await requestTranslationSidecarPermission(target)) {
-    throw new Error('번역 결과를 삭제하려면 원본 폴더 쓰기 권한이 필요합니다.')
+  const target = getTranslationSidecarTarget(item);
+  if (!target) return false;
+  if (!(await requestTranslationSidecarPermission(target))) {
+    throw new Error("번역 결과를 삭제하려면 원본 폴더 쓰기 권한이 필요합니다.");
   }
-  return await deleteTranslationSidecar(target)
+  return await deleteTranslationSidecar(target);
 }
 
 function createCurrentBatchTranslationRun(options: BatchTranslationOptions) {
-  const directoryHandle = directoryHandleCache.get(selectedDirectory.value)
-  if (!directoryHandle) return undefined
+  const directoryHandle = directoryHandleCache.get(selectedDirectory.value);
+  if (!directoryHandle) return undefined;
 
   return createBatchTranslationRun({
     directoryHandle,
     folderLabel: batchFolderLabel.value,
     items: batchSourceItems.value,
     translationOptions: options,
-  })
+  });
 }
 
 function batchTranslationContextMatchesCurrentFolder(): boolean {
   return Boolean(
-    batchTranslationContext
-    && batchTranslationContext.collection === collection.value
-    && batchTranslationContext.directoryPath === selectedDirectory.value,
-  )
+    batchTranslationContext &&
+    batchTranslationContext.collection === collection.value &&
+    batchTranslationContext.directoryPath === selectedDirectory.value,
+  );
 }
 
 function showBatchTranslationDialog(): void {
   if (
-    !batchTranslationActive.value
-    && batchTranslationContext
-    && !batchTranslationContextMatchesCurrentFolder()
+    !batchTranslationActive.value &&
+    batchTranslationContext &&
+    !batchTranslationContextMatchesCurrentFolder()
   ) {
-    resetBatchTranslation()
-    batchTranslationContext = undefined
+    resetBatchTranslation();
+    batchTranslationContext = undefined;
   }
-  batchTranslationDialogOpen.value = true
+  batchTranslationDialogOpen.value = true;
 }
 
 function handleStartBatchTranslation(options: BatchTranslationOptions): void {
-  if (!translationEnabled.value) return
-  const run = createCurrentBatchTranslationRun(options)
+  if (!translationEnabled.value) return;
+  const run = createCurrentBatchTranslationRun(options);
   if (!run) {
-    showError('현재 폴더에서 일괄 번역할 이미지나 압축파일을 찾지 못했습니다.')
-    return
+    showError("현재 폴더에서 일괄 번역할 이미지나 압축파일을 찾지 못했습니다.");
+    return;
   }
-  const activeCollection = collection.value
-  if (!activeCollection) return
+  const activeCollection = collection.value;
+  if (!activeCollection) return;
   batchTranslationContext = {
     collection: activeCollection,
     directoryPath: selectedDirectory.value,
-  }
-  void startBatchTranslation(run)
+  };
+  void startBatchTranslation(run);
 }
 
 function setViewMode(mode: MediaViewMode): void {
-  viewMode.value = mode
+  viewMode.value = mode;
 }
 
-function setSortKey(key: MediaSortKey): void {
-  sortKey.value = key
+function selectSortKey(key: MediaSortKey): void {
+  if (sortKey.value === key) sortAscending.value = !sortAscending.value;
+  else sortKey.value = key;
 }
 
 function setFileListColumn(column: MediaListColumnKey, visible: boolean): void {
-  fileListColumns[column] = visible
+  fileListColumns[column] = visible;
 }
 
 function updateViewerSlideshowPreference(
   preference: ViewerSlideshowPreference,
 ): void {
-  Object.assign(viewerSlideshowPreference, preference)
+  Object.assign(viewerSlideshowPreference, preference);
 }
 
 function updateTranslationEnabled(enabled: boolean): void {
-  translationEnabled.value = enabled
-  if (enabled) return
-  batchTranslationDialogOpen.value = false
-  stopBatchTranslation()
+  translationEnabled.value = enabled;
+  if (enabled) return;
+  batchTranslationDialogOpen.value = false;
+  stopBatchTranslation();
 }
 
 function moveSelection(delta: number): void {
-  if (!browserItems.value.length) return
-  const currentIndex = browserItems.value.findIndex((item) => item.id === browserSelectedId.value)
+  if (!browserItems.value.length) return;
+  const currentIndex = browserItems.value.findIndex(
+    (item) => item.id === browserSelectedId.value,
+  );
   const nextIndex = Math.min(
     browserItems.value.length - 1,
     Math.max(0, (currentIndex < 0 ? 0 : currentIndex) + delta),
-  )
-  selectBrowserItem(browserItems.value[nextIndex].id)
+  );
+  selectBrowserItem(browserItems.value[nextIndex].id);
 }
 
 function handleBrowserKeydown(event: KeyboardEvent): void {
   if (fileInfo.value) {
-    if (event.key === 'F1' || event.key === 'F5') event.preventDefault()
-    return
+    if (event.key === "F1" || event.key === "F5") event.preventDefault();
+    return;
   }
-  if (event.key === 'F5') {
-    event.preventDefault()
+  if (event.key === "F5") {
+    event.preventDefault();
     if (
-      !viewerOpen.value && !textViewerItem.value && !playbackItem.value
-      && !helpOpen.value && !optionsOpen.value && !batchTranslationDialogOpen.value
-    ) void refreshCollection()
-    return
+      !viewerOpen.value &&
+      !textViewerItem.value &&
+      !playbackItem.value &&
+      !helpOpen.value &&
+      !optionsOpen.value &&
+      !batchTranslationDialogOpen.value
+    )
+      void refreshCollection();
+    return;
   }
-  if (event.key === 'F1') {
-    event.preventDefault()
-    if (batchTranslationDialogOpen.value) return
-    optionsOpen.value = false
-    helpOpen.value = true
-    if (document.fullscreenElement) void document.exitFullscreen()
-    return
+  if (event.key === "F1") {
+    event.preventDefault();
+    if (batchTranslationDialogOpen.value) return;
+    optionsOpen.value = false;
+    helpOpen.value = true;
+    if (document.fullscreenElement) void document.exitFullscreen();
+    return;
   }
 
-  if (helpOpen.value || optionsOpen.value || batchTranslationDialogOpen.value || playbackItem.value) return
-
-  const target = event.target
-  if (target instanceof HTMLInputElement || target instanceof HTMLSelectElement || target instanceof HTMLMediaElement) return
   if (
-    event.key !== 'Backspace'
-    && target instanceof Element
-    && target.closest('.folder-tree')
-  ) return
+    helpOpen.value ||
+    optionsOpen.value ||
+    batchTranslationDialogOpen.value ||
+    playbackItem.value
+  )
+    return;
+
+  const target = event.target;
+  if (
+    target instanceof HTMLInputElement ||
+    target instanceof HTMLSelectElement ||
+    target instanceof HTMLMediaElement
+  )
+    return;
+  if (
+    event.key !== "Backspace" &&
+    target instanceof Element &&
+    target.closest(".folder-tree")
+  )
+    return;
 
   if (textViewerItem.value) {
-    if (event.key === 'Enter' || event.key === 'Escape') {
-      event.preventDefault()
-      closeTextViewer()
+    if (event.key === "Enter" || event.key === "Escape") {
+      event.preventDefault();
+      closeTextViewer();
     }
-    return
+    return;
   }
 
   if (viewerOpen.value) {
-    if (event.key === 'Enter' && !(target instanceof HTMLButtonElement)) {
-      event.preventDefault()
-      closeViewer()
+    if (event.key === "Enter" && !(target instanceof HTMLButtonElement)) {
+      event.preventDefault();
+      closeViewer();
     }
-    return
+    return;
   }
 
-  if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'o') {
-    event.preventDefault()
-    void openDirectory()
-    return
+  if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "o") {
+    event.preventDefault();
+    void openDirectory();
+    return;
   }
 
-  if (event.key === 'Enter' && canOpenViewer.value) {
-    if (target instanceof Element && target.closest('.app-toolbar')) return
-    event.preventDefault()
-    openViewer()
+  if (
+    event.code === "KeyI" &&
+    !event.ctrlKey && !event.metaKey && !event.altKey && !event.shiftKey &&
+    selectedFile.value
+  ) {
+    event.preventDefault();
+    showFileInfo();
+    return;
   }
-  if (event.key === 'Backspace') {
-    event.preventDefault()
+
+  if (event.key === "Enter" && canOpenViewer.value) {
+    if (target instanceof Element && target.closest(".app-toolbar")) return;
+    event.preventDefault();
+    openViewer();
+  }
+  if (event.key === "Backspace") {
+    event.preventDefault();
     if (archiveBrowsing.value) {
       if (selectedArchiveDirectory.value) {
-        const previousPath = selectedArchiveDirectory.value
-        const outerItemId = archiveOuterItemId.value
+        const previousPath = selectedArchiveDirectory.value;
+        const outerItemId = archiveOuterItemId.value;
         selectArchiveDirectory(
           getDirectoryPath(previousPath),
-          outerItemId ? `archive-folder:${outerItemId}:${previousPath}` : undefined,
-        )
+          outerItemId
+            ? `archive-folder:${outerItemId}:${previousPath}`
+            : undefined,
+        );
       } else {
-        leaveArchiveBrowser()
+        leaveArchiveBrowser();
       }
     } else if (selectedDirectory.value) {
-      const previousPath = selectedDirectory.value
+      const previousPath = selectedDirectory.value;
       void selectDirectory(
         getDirectoryPath(previousPath),
         `folder:${previousPath}`,
-      )
+      );
     }
-    return
+    return;
   }
   if (
-    viewMode.value === 'grid'
-    && thumbnailGrid.value?.moveSelectionByKey(event.key)
+    viewMode.value === "grid" &&
+    thumbnailGrid.value?.moveSelectionByKey(event.key)
   ) {
-    event.preventDefault()
-    return
+    event.preventDefault();
+    return;
   }
-  if (event.key === 'ArrowLeft' || event.key === 'ArrowUp') {
-    event.preventDefault()
-    moveSelection(-1)
+  if (event.key === "ArrowLeft" || event.key === "ArrowUp") {
+    event.preventDefault();
+    moveSelection(-1);
   }
-  if (event.key === 'ArrowRight' || event.key === 'ArrowDown') {
-    event.preventDefault()
-    moveSelection(1)
+  if (event.key === "ArrowRight" || event.key === "ArrowDown") {
+    event.preventDefault();
+    moveSelection(1);
   }
 }
 
-watch(viewMode, (value) => localStorage.setItem('websee-view-mode', value))
-watch(sortKey, (value) => localStorage.setItem('websee-sort-key', value))
-watch(sortAscending, (value) => localStorage.setItem('websee-sort-ascending', String(value)))
+watch(viewMode, (value) => localStorage.setItem("websee-view-mode", value));
+watch(sortKey, (value) => localStorage.setItem("websee-sort-key", value));
+watch(sortAscending, (value) =>
+  localStorage.setItem("websee-sort-ascending", String(value)),
+);
+watch(showToolbarLabels, (value) =>
+  localStorage.setItem("websee-toolbar-labels", String(value)),
+);
 watch(
   fileListColumns,
-  (value) => localStorage.setItem(FILE_LIST_COLUMNS_STORAGE_KEY, JSON.stringify(value)),
+  (value) =>
+    localStorage.setItem(FILE_LIST_COLUMNS_STORAGE_KEY, JSON.stringify(value)),
   { deep: true },
-)
+);
 watch(
   viewerSlideshowPreference,
   (value) => writeViewerSlideshowPreference(localStorage, value),
   { deep: true },
-)
+);
 watch(translationEnabled, (value) =>
   writeTranslationEnabledPreference(localStorage, value),
-)
-watch(translationEngine, (value) => writeTranslationEnginePreference(localStorage, value))
-watch(appleTranslationModel, (value) => writeAppleTranslationModelPreference(localStorage, value))
-watch(ocrEngine, (value) => writeOcrEnginePreference(localStorage, value))
+);
+watch(translationEngine, (value) =>
+  writeTranslationEnginePreference(localStorage, value),
+);
+watch(appleTranslationModel, (value) =>
+  writeAppleTranslationModelPreference(localStorage, value),
+);
+watch(ocrEngine, (value) => writeOcrEnginePreference(localStorage, value));
 
-onMounted(() => window.addEventListener('keydown', handleBrowserKeydown))
+onMounted(() => window.addEventListener("keydown", handleBrowserKeydown));
 onBeforeUnmount(() => {
-  window.removeEventListener('keydown', handleBrowserKeydown)
-  disposeArchiveBrowser()
-})
+  window.removeEventListener("keydown", handleBrowserKeydown);
+  disposeArchiveBrowser();
+});
 </script>
 
 <template>
@@ -1798,9 +2085,7 @@ onBeforeUnmount(() => {
       :can-batch-translate="canBatchTranslate"
       :can-show-file-info="Boolean(selectedFile)"
       :can-refresh="canRefreshCollection"
-      :has-media="Boolean(collection?.items.length)"
-      :sort-ascending="sortAscending"
-      :sort-key="sortKey"
+      :show-labels="showToolbarLabels"
       :translation-enabled="translationEnabled"
       :view-mode="viewMode"
       @open-directory="openDirectory"
@@ -1809,8 +2094,6 @@ onBeforeUnmount(() => {
       @refresh="refreshCollection"
       @show-batch-translation="showBatchTranslationDialog"
       @set-view="setViewMode"
-      @set-sort="setSortKey"
-      @toggle-sort-direction="sortAscending = !sortAscending"
       @show-file-info="showFileInfo"
       @show-options="optionsOpen = true"
       @show-help="helpOpen = true"
@@ -1865,9 +2148,12 @@ onBeforeUnmount(() => {
           <MediaPlayer
             :key="selectedBrowserItem.id"
             :item="selectedBrowserItem"
-            :load-file="loadPlaybackFile"
+            :load-file="loadItemFile"
             :expanded="playbackItem?.id === selectedBrowserItem.id"
-            :defer-preview="Boolean(selectedBrowserItem.archiveEntryPath) && selectedBrowserItem.size > ARCHIVE_AUTO_PREVIEW_MAX_ENTRY_SIZE"
+            :defer-preview="
+              Boolean(selectedBrowserItem.archiveEntryPath) &&
+              selectedBrowserItem.size > ARCHIVE_AUTO_PREVIEW_MAX_ENTRY_SIZE
+            "
             @metadata="recordPlaybackMetadata"
             @close="playbackItem = undefined"
           />
@@ -1879,10 +2165,13 @@ onBeforeUnmount(() => {
               title="플레이어 크게 열기"
               @click="openViewer(selectedBrowserItem.id)"
             >
-              <SvgIcon name="fit-screen" :size="16" />
+              <SvgIcon name="zoom-out" :size="16" />
             </button>
           </template>
-          <template #metadata>{{ selectedBrowserItem.format }} · {{ formatBytes(selectedBrowserItem.size) }}</template>
+          <template #metadata
+            >{{ selectedBrowserItem.format }} ·
+            {{ formatBytes(selectedBrowserItem.size) }}</template
+          >
         </PreviewPane>
         <ImagePreviewPane
           v-else
@@ -1890,7 +2179,9 @@ onBeforeUnmount(() => {
           translate="no"
           :item="selectedBrowserItem"
           :get-url="getUrl"
-          :archive-entry-ready="selectedBrowserItem?.id === archivePreviewItemId"
+          :archive-entry-ready="
+            selectedBrowserItem?.id === archivePreviewItemId
+          "
           :loading="archivePreviewLoading"
           @dimensions="updateDimensions"
         />
@@ -1932,16 +2223,24 @@ onBeforeUnmount(() => {
         />
         <FileList
           v-else
+          ref="fileList"
           :items="browserItems"
           :columns="fileListColumns"
+          :sort-key="sortKey"
+          :sort-ascending="sortAscending"
           :selected-id="browserSelectedId"
+          @set-sort="selectSortKey"
           @select="selectBrowserItem"
           @open="openViewer"
           @request-dimensions="requestDimensions"
         />
       </div>
 
-      <div v-else class="media-browser__empty-folder notranslate" translate="no">
+      <div
+        v-else
+        class="media-browser__empty-folder notranslate"
+        translate="no"
+      >
         <SvgIcon name="folder" :size="42" />
         <strong>이 폴더에는 지원하는 파일이 없습니다.</strong>
         <p>왼쪽 폴더 트리에서 파일이 있는 폴더를 선택하세요.</p>
@@ -1982,16 +2281,24 @@ onBeforeUnmount(() => {
       ref="archiveInput"
       class="visually-hidden"
       type="file"
-      accept=".zip,.cbz,.rar,.cbr,application/zip,application/vnd.rar"
-      aria-label="ZIP, CBZ, RAR 또는 CBR 파일 선택"
+      accept=".zip,.cbz,.rar,.cbr,.7z,application/zip,application/vnd.rar,application/x-7z-compressed"
+      aria-label="ZIP, CBZ, RAR, CBR 또는 7z 파일 선택"
       @change="handleArchiveSelection"
     />
 
     <div v-if="dragActive" class="drop-overlay notranslate" translate="no">
-      <div><strong>여기에 놓아서 열기</strong><span>폴더, 이미지, 텍스트, 음악, 동영상 또는 압축파일</span></div>
+      <div>
+        <strong>여기에 놓아서 열기</strong
+        ><span>폴더, 이미지, 텍스트, 음악, 동영상 또는 압축파일</span>
+      </div>
     </div>
 
-    <div v-if="loading" class="loading-overlay notranslate" translate="no" role="status">
+    <div
+      v-if="loading"
+      class="loading-overlay notranslate"
+      translate="no"
+      role="status"
+    >
       <div class="loading-overlay__dialog">
         <div class="loading-overlay__spinner loading-spin" aria-hidden="true" />
         <strong>{{ loadingMessage }}</strong>
@@ -1999,10 +2306,19 @@ onBeforeUnmount(() => {
       </div>
     </div>
 
-    <div v-if="errorMessage" class="error-toast notranslate" translate="no" role="alert">
+    <div
+      v-if="errorMessage"
+      class="error-toast notranslate"
+      translate="no"
+      role="alert"
+    >
       <strong>열기 오류</strong>
       <span>{{ errorMessage }}</span>
-      <button type="button" aria-label="오류 메시지 닫기" @click="errorMessage = ''">
+      <button
+        type="button"
+        aria-label="오류 메시지 닫기"
+        @click="errorMessage = ''"
+      >
         <SvgIcon name="close" :size="18" />
       </button>
     </div>
@@ -2054,13 +2370,23 @@ onBeforeUnmount(() => {
       translate="no"
       :item="fileInfo.item"
       :path="fileInfo.path"
+      :load-file="loadItemFile"
+      @duration="setMediaDuration"
       @close="fileInfo = undefined"
     />
-    <HelpDialog v-if="helpOpen" class="notranslate" translate="no" @close="helpOpen = false" />
+    <HelpDialog
+      v-if="helpOpen"
+      class="notranslate"
+      translate="no"
+      @close="helpOpen = false"
+    />
     <OptionsDialog
       v-if="optionsOpen"
       class="notranslate"
       translate="no"
+      :show-toolbar-labels="showToolbarLabels"
+      :sort-key="sortKey"
+      :sort-ascending="sortAscending"
       :file-list-columns="fileListColumns"
       :slideshow-preference="viewerSlideshowPreference"
       :translation-enabled="translationEnabled"
@@ -2070,6 +2396,9 @@ onBeforeUnmount(() => {
       :apple-translation-model="appleTranslationModel"
       :ocr-engine="ocrEngine"
       @close="optionsOpen = false"
+      @update-toolbar-labels="showToolbarLabels = $event"
+      @update-sort-key="sortKey = $event"
+      @update-sort-ascending="sortAscending = $event"
       @set-file-list-column="setFileListColumn"
       @update-slideshow-preference="updateViewerSlideshowPreference"
       @update-translation-enabled="updateTranslationEnabled"
@@ -2150,7 +2479,7 @@ onBeforeUnmount(() => {
       position: absolute;
       background: var(--color-shadow);
       box-shadow: 1px 1px var(--color-light);
-      content: '';
+      content: "";
     }
 
     &:hover,
@@ -2219,7 +2548,8 @@ onBeforeUnmount(() => {
   min-width: 0;
   min-height: 0;
   background: #808080;
-  background-image: linear-gradient(45deg, rgb(255 255 255 / 3%) 25%, transparent 25%),
+  background-image:
+    linear-gradient(45deg, rgb(255 255 255 / 3%) 25%, transparent 25%),
     linear-gradient(-45deg, rgb(255 255 255 / 3%) 25%, transparent 25%);
   background-size: 8px 8px;
 }
@@ -2327,6 +2657,5 @@ onBeforeUnmount(() => {
   .media-browser {
     grid-template-columns: var(--sidebar-width, 180px) 6px minmax(0, 1fr);
   }
-
 }
 </style>

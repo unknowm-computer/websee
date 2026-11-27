@@ -177,6 +177,44 @@ export async function readTextFile(
   }
 }
 
+export async function readTextFileDetails(file: File): Promise<{ encoding: string; lineEndings: string }> {
+  const sample = await readTextFile(file, TEXT_PREVIEW_MAX_BYTES)
+  const endings = new Set<string>()
+  function inspect(text: string): void {
+    if (/\r\n/.test(text)) endings.add('CRLF')
+    if (/(?<!\r)\n/.test(text)) endings.add('LF')
+    if (/\r(?!\n)/.test(text)) endings.add('CR')
+  }
+
+  if (!sample.truncated) {
+    inspect(sample.text)
+  } else {
+    const reader = file.stream().pipeThrough(new TextDecoderStream(DECODER_LABELS[sample.encoding])).getReader()
+    let trailingCR = ''
+    try {
+      while (endings.size < 3) {
+        const { done, value } = await reader.read()
+        if (done) {
+          inspect(trailingCR)
+          break
+        }
+        const chunk = trailingCR + value
+        // A CR at the end of this chunk may be the first half of CRLF.
+        trailingCR = chunk.endsWith('\r') ? '\r' : ''
+        inspect(trailingCR ? chunk.slice(0, -1) : chunk)
+      }
+    } finally {
+      await reader.cancel()
+    }
+  }
+
+  const formats = [...endings].join(', ')
+  return {
+    encoding: detectTextFileBom(sample.bytes) ? `${sample.encoding} (BOM)` : sample.encoding,
+    lineEndings: endings.size > 1 ? `혼합 (${formats})` : formats || '없음',
+  }
+}
+
 function encodeUtf16(text: string, littleEndian: boolean, bom: boolean): Uint8Array {
   const prefixLength = bom ? 2 : 0
   const bytes = new Uint8Array(prefixLength + text.length * 2)

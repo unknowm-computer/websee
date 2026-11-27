@@ -15,6 +15,7 @@ import {
 import type {
   MediaListColumnKey,
   MediaListColumnVisibility,
+  MediaSortKey,
 } from "@/types/media";
 import type { AppleTranslationModel, OcrEngineId, TranslationEngineId } from "@/types/translationEngine";
 import { formatBytes } from "@/utils/media";
@@ -24,6 +25,9 @@ import {
 } from "@/utils/viewerPreferences";
 
 interface Props {
+  showToolbarLabels: boolean;
+  sortKey: MediaSortKey;
+  sortAscending: boolean;
   fileListColumns: MediaListColumnVisibility;
   slideshowPreference: ViewerSlideshowPreference;
   translationEnabled: boolean;
@@ -38,6 +42,9 @@ const props = defineProps<Props>();
 
 const emit = defineEmits<{
   (event: "close"): void;
+  (event: "update-toolbar-labels", visible: boolean): void;
+  (event: "update-sort-key", key: MediaSortKey): void;
+  (event: "update-sort-ascending", ascending: boolean): void;
   (
     event: "set-file-list-column",
     column: MediaListColumnKey,
@@ -200,6 +207,42 @@ onMounted(() => {
     @close="emit('close')"
   >
     <div class="options-dialog__body">
+      <section aria-labelledby="file-browser-settings-title">
+        <h2 id="file-browser-settings-title">파일 탐색</h2>
+        <div class="options-dialog__feature-settings options-dialog__browser-settings">
+          <label class="options-dialog__feature-toggle">
+            <input
+              type="checkbox"
+              :checked="showToolbarLabels"
+              @change="emit('update-toolbar-labels', ($event.target as HTMLInputElement).checked)"
+            />
+            <span>툴바 버튼 텍스트 표시</span>
+          </label>
+          <label class="options-dialog__select-setting">
+            <span>정렬 기준</span>
+            <select
+              :value="sortKey"
+              @change="emit('update-sort-key', ($event.target as HTMLSelectElement).value as MediaSortKey)"
+            >
+              <option value="name">파일명</option>
+              <option value="size">크기</option>
+              <option value="format">형식</option>
+              <option value="modified">수정일</option>
+            </select>
+          </label>
+          <label class="options-dialog__select-setting">
+            <span>정렬 방향</span>
+            <select
+              :value="sortAscending ? 'ascending' : 'descending'"
+              @change="emit('update-sort-ascending', ($event.target as HTMLSelectElement).value === 'ascending')"
+            >
+              <option value="ascending">오름차순</option>
+              <option value="descending">내림차순</option>
+            </select>
+          </label>
+        </div>
+      </section>
+
       <section aria-labelledby="file-list-columns-title">
         <h2 id="file-list-columns-title">파일 목록 표시 항목</h2>
         <p>
@@ -441,6 +484,11 @@ onMounted(() => {
 
   &__feature-toggle {
     grid-column: 1 / -1;
+  }
+
+  &__browser-settings {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    column-gap: 16px;
   }
 
   &__select-setting {

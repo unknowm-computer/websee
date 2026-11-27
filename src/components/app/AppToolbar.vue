@@ -1,15 +1,13 @@
 <script setup lang="ts">
-import SvgIcon from "@/components/common/SvgIcon.vue";
-import type { MediaSortKey, MediaViewMode } from "@/types/media";
+import AppToolbarButton from "@/components/app/AppToolbarButton.vue";
+import type { MediaViewMode } from "@/types/media";
 
 interface Props {
   batchActive: boolean;
   canBatchTranslate: boolean;
   canShowFileInfo: boolean;
   canRefresh: boolean;
-  hasMedia: boolean;
-  sortAscending: boolean;
-  sortKey: MediaSortKey;
+  showLabels: boolean;
   translationEnabled: boolean;
   viewMode: MediaViewMode;
 }
@@ -23,8 +21,6 @@ const emit = defineEmits<{
   (event: "refresh"): void;
   (event: "show-batch-translation"): void;
   (event: "set-view", mode: MediaViewMode): void;
-  (event: "set-sort", key: MediaSortKey): void;
-  (event: "toggle-sort-direction"): void;
   (event: "show-file-info"): void;
   (event: "show-options"): void;
   (event: "show-help"): void;
@@ -32,129 +28,85 @@ const emit = defineEmits<{
 </script>
 
 <template>
-  <div class="app-toolbar" role="toolbar" aria-label="파일 탐색 도구">
-    <button type="button" title="폴더 열기" @click="emit('open-directory')">
-      <SvgIcon class="app-toolbar__icon" name="folder-open" />
-      <span>폴더</span>
-    </button>
-    <button type="button" title="이미지, 텍스트, 음악, 동영상 파일 열기" @click="emit('open-files')">
-      <SvgIcon class="app-toolbar__icon" name="file" />
-      <span>파일</span>
-    </button>
-    <button
-      type="button"
-      title="ZIP, CBZ, RAR 또는 CBR 열기"
+  <div
+    class="app-toolbar"
+    :class="{ 'app-toolbar--icons-only': !showLabels }"
+    role="toolbar"
+    aria-label="파일 탐색 도구"
+  >
+    <AppToolbarButton icon="folder-open" label="폴더" title="폴더 열기" @click="emit('open-directory')" />
+    <AppToolbarButton
+      icon="file"
+      label="파일"
+      title="이미지, 텍스트, 음악, 동영상 파일 열기"
+      @click="emit('open-files')"
+    />
+    <AppToolbarButton
+      icon="folder-zip"
+      label="압축파일"
+      title="ZIP, CBZ, RAR, CBR 또는 7z 열기"
       @click="emit('open-archive')"
-    >
-      <SvgIcon class="app-toolbar__icon" name="folder-zip" />
-      <span>압축파일</span>
-    </button>
-    <button
-      type="button"
+    />
+    <AppToolbarButton
+      icon="refresh"
+      label="새로고침"
       title="현재 폴더의 파일 목록 새로고침 (F5)"
       :disabled="!canRefresh"
       @click="emit('refresh')"
-    >
-      <SvgIcon class="app-toolbar__icon" name="refresh" />
-      <span>새로고침</span>
-    </button>
+    />
 
     <span class="app-toolbar__separator" aria-hidden="true" />
 
-    <button
-      type="button"
+    <AppToolbarButton
+      icon="grid"
+      label="썸네일"
       :class="{ 'is-pressed': viewMode === 'grid' }"
       :aria-pressed="viewMode === 'grid'"
       title="썸네일 보기"
       @click="emit('set-view', 'grid')"
-    >
-      <SvgIcon class="app-toolbar__icon" name="grid" />
-      <span>썸네일</span>
-    </button>
-    <button
-      type="button"
+    />
+    <AppToolbarButton
+      icon="list"
+      label="목록"
       :class="{ 'is-pressed': viewMode === 'list' }"
       :aria-pressed="viewMode === 'list'"
       title="목록 보기"
       @click="emit('set-view', 'list')"
-    >
-      <SvgIcon class="app-toolbar__icon" name="list" />
-      <span>목록</span>
-    </button>
+    />
 
     <span class="app-toolbar__separator" aria-hidden="true" />
 
-    <label class="app-toolbar__sort">
-      <span>정렬</span>
-      <select
-        :value="sortKey"
-        :disabled="!hasMedia"
-        aria-label="정렬 기준"
-        @change="
-          emit(
-            'set-sort',
-            ($event.target as HTMLSelectElement).value as MediaSortKey,
-          )
-        "
-      >
-        <option value="name">이름</option>
-        <option value="size">크기</option>
-        <option value="format">형식</option>
-        <option value="modified">수정일</option>
-      </select>
-    </label>
-    <button
-      type="button"
-      class="app-toolbar__direction"
-      :disabled="!hasMedia"
-      :title="sortAscending ? '오름차순' : '내림차순'"
-      @click="emit('toggle-sort-direction')"
-    >
-      <SvgIcon :name="sortAscending ? 'arrow-up' : 'arrow-down'" :size="18" />
-    </button>
-
-    <span class="app-toolbar__separator" aria-hidden="true" />
-
-    <button
-      type="button"
-      title="선택한 파일의 상세 정보 보기"
+    <AppToolbarButton
+      icon="info"
+      label="파일 정보"
+      title="파일 정보 (I)"
+      aria-keyshortcuts="I"
       aria-haspopup="dialog"
       :disabled="!canShowFileInfo"
       @click="emit('show-file-info')"
-    >
-      <SvgIcon class="app-toolbar__icon" name="info" />
-      <span>파일 정보</span>
-    </button>
+    />
 
     <template v-if="translationEnabled">
       <span class="app-toolbar__separator" aria-hidden="true" />
 
-      <button
-        type="button"
+      <AppToolbarButton
+        icon="auto"
+        label="일괄 번역"
         :class="{ 'is-pressed': batchActive }"
         :aria-pressed="batchActive"
         title="현재 폴더의 이미지와 압축파일을 일괄 번역"
         :disabled="!canBatchTranslate"
         @click="emit('show-batch-translation')"
-      >
-        <SvgIcon class="app-toolbar__icon" name="auto" />
-        <span>일괄 번역</span>
-      </button>
+      />
     </template>
 
     <span class="app-toolbar__separator" aria-hidden="true" />
 
-    <button type="button" title="WebSee 옵션" @click="emit('show-options')">
-      <SvgIcon class="app-toolbar__icon" name="options" />
-      <span>옵션</span>
-    </button>
+    <AppToolbarButton icon="options" label="옵션" title="WebSee 옵션" @click="emit('show-options')" />
 
     <span class="app-toolbar__separator" aria-hidden="true" />
 
-    <button type="button" title="단축키와 사용 방법" @click="emit('show-help')">
-      <SvgIcon class="app-toolbar__icon" name="help" />
-      <span>도움말</span>
-    </button>
+    <AppToolbarButton icon="help" label="도움말" title="단축키와 사용 방법" @click="emit('show-help')" />
   </div>
 </template>
 
@@ -201,10 +153,6 @@ const emit = defineEmits<{
     }
   }
 
-  &__icon {
-    color: inherit;
-  }
-
   &__separator {
     width: 1px;
     margin: 2px 4px;
@@ -212,24 +160,17 @@ const emit = defineEmits<{
     box-shadow: 1px 0 var(--color-light);
   }
 
-  &__sort {
-    display: flex;
-    gap: 5px;
-    align-items: center;
-    margin-left: 2px;
+  &--icons-only {
+    min-height: 40px;
 
-    select {
-      width: 92px;
-      height: 25px;
+    > button {
+      min-width: 36px;
+      padding-inline: 5px;
     }
   }
 
-  &__direction {
-    align-self: center;
-    min-width: 28px !important;
-    height: 25px;
-    padding: 0 !important;
-    font-size: 17px !important;
+  &--icons-only &__label {
+    display: none;
   }
 }
 

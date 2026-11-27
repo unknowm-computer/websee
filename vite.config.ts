@@ -6,6 +6,10 @@ import { defineConfig } from 'vite'
 export default defineConfig({
   base: './',
   plugins: [vue()],
+  // Avoid a dev-server reload when a worker first opens a selected local file.
+  optimizeDeps: {
+    include: ['mediainfo.js', 'libarchive.js/src/webworker/wasm-gen/libarchive.js'],
+  },
   build: {
     rollupOptions: {
       input: {

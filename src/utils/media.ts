@@ -74,8 +74,23 @@ export function isPlayableItem(item: MediaItem): item is PlayableItem {
   return item.kind === 'audio' || item.kind === 'video'
 }
 
+export function setMediaDuration(item: PlayableItem, seconds: number | undefined): void {
+  if (seconds !== undefined && Number.isFinite(seconds) && seconds >= 0) {
+    item.duration = seconds
+  }
+}
+
+export function formatDuration(seconds: number | undefined): string {
+  if (seconds === undefined || !Number.isFinite(seconds) || seconds < 0) return '—'
+  const wholeSeconds = Math.floor(seconds)
+  const minutes = Math.floor(wholeSeconds / 60)
+  const pad = (value: number): string => String(value).padStart(2, '0')
+  const prefix = minutes >= 60 ? `${Math.floor(minutes / 60)}:${pad(minutes % 60)}` : String(minutes)
+  return `${prefix}:${pad(wholeSeconds % 60)}`
+}
+
 export function isArchiveFileName(fileName: string): boolean {
-  return isZipArchiveFileName(fileName) || isRarArchiveFileName(fileName)
+  return isZipArchiveFileName(fileName) || isRarArchiveFileName(fileName) || getExtension(fileName) === '7z'
 }
 
 export function isZipArchiveFileName(fileName: string): boolean {

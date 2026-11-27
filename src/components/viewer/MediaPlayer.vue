@@ -127,6 +127,7 @@ onBeforeUnmount(stopPlayer)
       playsinline
       tabindex="0"
       @loadedmetadata="handleMetadata"
+      @durationchange="emit('metadata', item, $event.currentTarget as HTMLMediaElement)"
       @error="error = '이 파일을 재생할 수 없습니다. 지원하지 않는 코덱이거나 파일이 손상되었을 수 있습니다.'"
     />
     <p v-else class="media-player__message" role="status">파일을 여는 중입니다…</p>

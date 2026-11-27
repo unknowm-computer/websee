@@ -1,34 +1,74 @@
 <script setup lang="ts">
-import { computed } from 'vue'
+import { computed, ref, shallowRef, watch } from 'vue'
 
 import AppDialog from '@/components/common/AppDialog.vue'
 import SvgIcon from '@/components/common/SvgIcon.vue'
-import type { MediaItem } from '@/types/media'
-import { formatBytes, getContentFileKind, isPlayableItem } from '@/utils/media'
+import { createFileDetailsWorker, readSvgDetails, type FileDetails, type FileDetailsRequest } from '@/services/fileDetails'
+import type { MediaItem, PlayableItem } from '@/types/media'
+import { formatBytes, formatDuration, getContentFileKind, isPlayableItem } from '@/utils/media'
 
 interface Props {
   item: MediaItem
   path: string
+  loadFile: (item: MediaItem) => Promise<File>
 }
 
 const props = defineProps<Props>()
 const emit = defineEmits<{
   (event: 'close'): void
+  (event: 'duration', item: PlayableItem, seconds: number): void
 }>()
 
 const kindLabels = { image: '이미지', text: '텍스트', audio: '음악', video: '동영상', archive: '압축파일' }
 const kind = computed(() => getContentFileKind(props.item.name) ?? 'archive')
+const details = shallowRef<FileDetails>()
+const detailsStatus = ref('')
+
+watch(() => props.item, async (item, _, onCleanup) => {
+  details.value = undefined
+  detailsStatus.value = ''
+  const fileKind = kind.value
+  if (fileKind === 'archive') return
+
+  let active = true
+  let worker: Worker | undefined
+  onCleanup(() => {
+    active = false
+    worker?.terminate()
+  })
+  function finish(result: FileDetails | null): void {
+    worker?.terminate()
+    if (!active) return
+    details.value = result ?? undefined
+    if (isPlayableItem(item) && item.duration === undefined && result?.duration !== undefined) {
+      emit('duration', item, result.duration)
+    }
+    detailsStatus.value = result?.fields.length ? '' : '추가 형식 정보를 확인할 수 없습니다.'
+  }
+
+  detailsStatus.value = '형식 정보를 읽는 중입니다…'
+  try {
+    const file = await props.loadFile(item)
+    if (!active) return
+    if (item.format === 'SVG') {
+      finish(await readSvgDetails(file))
+      return
+    }
+    worker = createFileDetailsWorker()
+    worker.onmessage = (event: MessageEvent<FileDetails | null>) => finish(event.data)
+    worker.onerror = () => finish(null)
+    worker.postMessage({ file, kind: fileKind } satisfies FileDetailsRequest)
+  } catch {
+    finish(null)
+  }
+}, { immediate: true })
+
 const numberFormat = new Intl.NumberFormat('ko-KR')
 const modified = computed(() => new Date(props.item.lastModified).toLocaleString('ko-KR'))
-const duration = computed(() => {
-  const item = props.item
-  if (!isPlayableItem(item) || item.duration === undefined) return '—'
-  const seconds = Math.floor(item.duration)
-  const minutes = Math.floor(seconds / 60)
-  const pad = (value: number): string => String(value).padStart(2, '0')
-  return minutes >= 60
-    ? `${Math.floor(minutes / 60)}:${pad(minutes % 60)}:${pad(seconds % 60)}`
-    : `${minutes}:${pad(seconds % 60)}`
+const resolution = computed(() => {
+  const width = props.item.width ?? details.value?.width
+  const height = props.item.height ?? details.value?.height
+  return width && height ? `${width} × ${height}` : '—'
 })
 </script>
 
@@ -46,10 +86,16 @@ const duration = computed(() => {
       </dd>
       <dt>{{ item.archiveEntryPath ? '압축파일 수정일' : '수정일' }}</dt><dd>{{ modified }}</dd>
       <template v-if="kind === 'image' || kind === 'video'">
-        <dt>해상도</dt><dd>{{ item.width && item.height ? `${item.width} × ${item.height}` : '—' }}</dd>
+        <dt>해상도</dt><dd>{{ resolution }}</dd>
       </template>
       <template v-if="isPlayableItem(item)">
-        <dt>재생 시간</dt><dd>{{ duration }}</dd>
+        <dt>재생 시간</dt><dd>{{ formatDuration(item.duration ?? details?.duration) }}</dd>
+      </template>
+      <template v-for="field in details?.fields" :key="field.label">
+        <dt>{{ field.label }}</dt><dd>{{ field.value }}</dd>
+      </template>
+      <template v-if="detailsStatus">
+        <dt>형식 정보</dt><dd role="status">{{ detailsStatus }}</dd>
       </template>
     </dl>
   </AppDialog>

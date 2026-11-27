@@ -4,6 +4,7 @@ import {
   decodeTextBytes,
   encodeTextFile,
   readTextFile,
+  readTextFileDetails,
   TEXT_PREVIEW_MAX_BYTES,
   TEXT_VIEWER_MAX_BYTES,
   writeTextFile,
@@ -38,6 +39,26 @@ const japaneseBytes = Uint8Array.from([
 ])
 
 describe('text file decoding', () => {
+  it('reports the detected encoding, BOM and mixed line endings', async () => {
+    const bytes = Uint8Array.of(0xff, 0xfe, 65, 0, 13, 0, 10, 0, 66, 0, 10, 0, 67, 0, 13, 0)
+    await expect(readTextFileDetails(new File([bytes], 'mixed.txt'))).resolves.toEqual({
+      encoding: 'UTF-16 LE (BOM)', lineEndings: '혼합 (CRLF, LF, CR)',
+    })
+  })
+
+  it('recognizes a split CRLF past the preview limit without counting it twice', async () => {
+    const file = new File(['a'.repeat(TEXT_PREVIEW_MAX_BYTES), '\r', '\nend'], 'long.txt')
+    vi.spyOn(file, 'stream').mockImplementation(() => new ReadableStream({
+      start(controller) {
+        controller.enqueue(new TextEncoder().encode('a'.repeat(TEXT_PREVIEW_MAX_BYTES) + '\r'))
+        controller.enqueue(new TextEncoder().encode('\nend'))
+        controller.close()
+      },
+    }))
+    await expect(readTextFileDetails(file)).resolves.toEqual({ encoding: 'UTF-8', lineEndings: 'CRLF' })
+    await expect(readTextFileDetails(new File(['한 줄'], 'single.txt'))).resolves.toMatchObject({ lineEndings: '없음' })
+  })
+
   it('decodes UTF-8 text and removes its BOM', () => {
     const bytes = new Uint8Array([0xef, 0xbb, 0xbf, ...new TextEncoder().encode('한글 메모')])
 
